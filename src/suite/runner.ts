@@ -11,11 +11,11 @@
 import { createClientFromEnv, type RemoteClient } from "../client";
 import { TEST_MATRIX, type TestCase } from "@/data/test-matrix";
 import { swapDefaultEntity } from "../setup/entity-swap";
-import { runCMPath, cleanupCMPath } from "../paths/cm";
-import { runCMPlusPath, cleanupCMPlusPath } from "../paths/cm-plus";
-import { runCORPath, cleanupCORPath } from "../paths/cor";
-import { runCORIR35Path, cleanupCORIR35Path } from "../paths/cor-ir35";
-import { runEORFallbackPath, cleanupEORFallbackPath } from "../paths/eor-fallback";
+import { runCMPath } from "../paths/cm";
+import { runCMPlusPath } from "../paths/cm-plus";
+import { runCORPath } from "../paths/cor";
+import { runCORIR35Path } from "../paths/cor-ir35";
+import { runEORFallbackPath } from "../paths/eor-fallback";
 import { getCountries, findCountry, getCountryProducts } from "../steps/countries";
 import { cancelEmployment } from "../steps/employment";
 import { compareTestResult } from "./compare";
@@ -35,9 +35,6 @@ type BroadcastFn = (event: string, data: unknown) => void;
 const CONTRACTORS: Record<string, { contractor: { full_name: string; job_title: string; email: string } }> = {
   PRT, GBR, DEU, USA, IND, BHR,
 };
-
-/** Entity grouping order (matches original vitest test file order) */
-const ENTITY_ORDER = ["GBR", "USA", "DEU", "IND"];
 
 const SANCTIONED_CODES = ["IRN", "CUB", "PRK", "SYR"];
 
@@ -81,155 +78,130 @@ export async function runSuite(
     tests: tests.map((tc) => ({ testId: tc.id, name: tc.id })),
   });
 
-  // Group tests by entity country
-  const groups = new Map<string, (TestCase & { id: string })[]>();
+  // Run tests top-to-bottom as they appear in the matrix.
+  // Swap entity only when the entity country changes from the previous test.
+  let currentEntity: string | null = null;
+  let entityId: string | undefined;
+
   for (const tc of tests) {
-    const entity = tc.entity || "GBR";
-    if (!groups.has(entity)) groups.set(entity, []);
-    groups.get(entity)!.push(tc);
-  }
+    const testStart = Date.now();
+    let employmentId: string | undefined;
 
-  // Process groups in defined order, then any remaining
-  const orderedEntities = [
-    ...ENTITY_ORDER.filter((e) => groups.has(e)),
-    ...[...groups.keys()].filter((e) => !ENTITY_ORDER.includes(e)),
-  ];
-
-  for (const entityCode of orderedEntities) {
-    const groupTests = groups.get(entityCode)!;
-
-    // Swap entity
-    let entityId: string | undefined;
     try {
-      const entity = await swapDefaultEntity(client, companySlug, entityCode);
-      entityId = entity.legal_entity_id;
-      broadcast("entity:swap", { countryCode: entityCode, entityId });
-    } catch (err) {
-      // If entity swap fails, mark all tests in this group as failed
-      for (const tc of groupTests) {
-        const errMsg = err instanceof Error ? err.message : String(err);
+      if (tc.path === "Read-only") {
+        // Read-only tests: no employment, just check countries
+        await runReadOnlyTest(client, tc, broadcast);
+        passed++;
         broadcast("test:result", {
           name: tc.id,
           testId: tc.id,
-          state: "fail",
-          duration: 0,
-          error: `Entity swap failed for ${entityCode}: ${errMsg}`,
-        });
-        failed++;
-      }
-      continue;
-    }
-
-    // Run each test in the group
-    for (const tc of groupTests) {
-      const testStart = Date.now();
-      let employmentId: string | undefined;
-
-      try {
-        if (tc.path === "Read-only") {
-          // Read-only tests: no employment, just check countries
-          await runReadOnlyTest(client, tc, broadcast);
-          passed++;
-          broadcast("test:result", {
-            name: tc.id,
-            testId: tc.id,
-            state: "pass",
-            duration: Date.now() - testStart,
-            error: null,
-          });
-          continue;
-        }
-
-        // Resolve contractor data
-        const hireCountry = tc.hire || "PRT";
-        const fixture = CONTRACTORS[hireCountry];
-        if (!fixture) {
-          throw new Error(`No contractor fixture for country: ${hireCountry}`);
-        }
-
-        // Unique email per test run
-        const contractor = {
-          ...fixture.contractor,
-          email: `${tc.id.toLowerCase().replace(/[^a-z0-9]/g, "")}.run${Date.now()}@example.com`,
-        };
-
-        if (!entityId) {
-          throw new Error("No entity ID available");
-        }
-
-        // Dispatch to path function
-        const result = await dispatchPathFunction(client, tc, {
-          companyId: companySlug,
-          countryCode: hireCountry,
-          contractor,
-          legalEntityId: entityId,
-        });
-
-        employmentId = result.employmentId;
-
-        // Emit intermediate events for frontend
-        emitIntermediateEvents(broadcast, tc, result);
-
-        // Compare results
-        if (tc.expected) {
-          const comparison = compareTestResult(
-            {
-              eligibility: result.eligibility,
-              availableProducts: result.availableProducts,
-              countryProducts: result.countryProducts,
-              questionnaireResult: result.questionnaireResult,
-            },
-            tc.expected
-          );
-
-          if (comparison.passed) {
-            passed++;
-            broadcast("test:result", {
-              name: tc.id,
-              testId: tc.id,
-              state: "pass",
-              duration: Date.now() - testStart,
-              error: null,
-            });
-          } else {
-            failed++;
-            broadcast("test:result", {
-              name: tc.id,
-              testId: tc.id,
-              state: "fail",
-              duration: Date.now() - testStart,
-              error: comparison.errors.join("; "),
-            });
-          }
-        } else {
-          // No expected values — just check it ran without error
-          passed++;
-          broadcast("test:result", {
-            name: tc.id,
-            testId: tc.id,
-            state: "pass",
-            duration: Date.now() - testStart,
-            error: null,
-          });
-        }
-      } catch (err) {
-        failed++;
-        const errMsg = err instanceof Error ? err.message : String(err);
-        broadcast("test:result", {
-          name: tc.id,
-          testId: tc.id,
-          state: "fail",
+          state: "pass",
           duration: Date.now() - testStart,
-          error: errMsg,
+          error: null,
         });
-      } finally {
-        // Cleanup: cancel employment if one was created
-        if (employmentId) {
-          try {
-            await cancelEmployment(client, employmentId);
-          } catch {
-            // Non-critical — best-effort cleanup
-          }
+        continue;
+      }
+
+      // Swap entity if needed (only when entity country changes)
+      const entityCode = tc.entity || "GBR";
+      if (entityCode !== currentEntity) {
+        const entity = await swapDefaultEntity(client, companySlug, entityCode);
+        entityId = entity.legal_entity_id;
+        currentEntity = entityCode;
+        broadcast("entity:swap", { countryCode: entityCode, entityId });
+        // Small delay after swap to let sandbox settle
+        await new Promise((r) => setTimeout(r, 500));
+      }
+
+      // Resolve contractor data
+      const hireCountry = tc.hire || "PRT";
+      const fixture = CONTRACTORS[hireCountry];
+      if (!fixture) {
+        throw new Error(`No contractor fixture for country: ${hireCountry}`);
+      }
+
+      // Unique email per test run
+      const contractor = {
+        ...fixture.contractor,
+        email: `${tc.id.toLowerCase().replace(/[^a-z0-9]/g, "")}.run${Date.now()}@example.com`,
+      };
+
+      if (!entityId) {
+        throw new Error("No entity ID available");
+      }
+
+      // Dispatch to path function
+      const result = await dispatchPathFunction(client, tc, {
+        companyId: companySlug,
+        countryCode: hireCountry,
+        contractor,
+        legalEntityId: entityId,
+      });
+
+      employmentId = result.employmentId;
+
+      // Emit intermediate events for frontend
+      emitIntermediateEvents(broadcast, tc, result);
+
+      // Compare results
+      if (tc.expected) {
+        const comparison = compareTestResult(
+          {
+            eligibility: result.eligibility,
+            availableProducts: result.availableProducts,
+            countryProducts: result.countryProducts,
+            questionnaireResult: result.questionnaireResult,
+          },
+          tc.expected
+        );
+
+        if (comparison.passed) {
+          passed++;
+          broadcast("test:result", {
+            name: tc.id,
+            testId: tc.id,
+            state: "pass",
+            duration: Date.now() - testStart,
+            error: null,
+          });
+        } else {
+          failed++;
+          broadcast("test:result", {
+            name: tc.id,
+            testId: tc.id,
+            state: "fail",
+            duration: Date.now() - testStart,
+            error: comparison.errors.join("; "),
+          });
+        }
+      } else {
+        // No expected values — just check it ran without error
+        passed++;
+        broadcast("test:result", {
+          name: tc.id,
+          testId: tc.id,
+          state: "pass",
+          duration: Date.now() - testStart,
+          error: null,
+        });
+      }
+    } catch (err) {
+      failed++;
+      const errMsg = err instanceof Error ? err.message : String(err);
+      broadcast("test:result", {
+        name: tc.id,
+        testId: tc.id,
+        state: "fail",
+        duration: Date.now() - testStart,
+        error: errMsg,
+      });
+    } finally {
+      // Cleanup: cancel employment if one was created
+      if (employmentId) {
+        try {
+          await cancelEmployment(client, employmentId);
+        } catch {
+          // Non-critical — best-effort cleanup
         }
       }
     }

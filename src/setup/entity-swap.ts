@@ -89,17 +89,26 @@ export async function bypassEligibilityChecks(
   }
 }
 
-/** Reassign a legal entity as the company's default */
+/** Reassign a legal entity as the company's default (with retry for transient 500s) */
 export async function reassignDefaultEntity(
   client: RemoteClient,
   companySlug: string,
   entitySlug: string
 ): Promise<void> {
-  const { status, data } = await client.put(
-    `/v1/sandbox/companies/${companySlug}/default-legal-entity/${entitySlug}`
-  );
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const { status, data } = await client.put(
+      `/v1/sandbox/companies/${companySlug}/default-legal-entity/${entitySlug}`
+    );
 
-  if (status !== 200) {
+    if (status === 200) return;
+
+    if (attempt < maxAttempts && status >= 500) {
+      const delay = attempt * 1000;
+      await new Promise((r) => setTimeout(r, delay));
+      continue;
+    }
+
     throw new Error(
       `PUT reassign-default-entity failed (${status}): ${JSON.stringify(data)}`
     );
