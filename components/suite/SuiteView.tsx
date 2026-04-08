@@ -270,7 +270,7 @@ export default function SuiteView() {
               <th className="col-st"></th>
               <th className="col-id">ID</th>
               <th className="col-desc">Description</th>
-              <th className="col-route">Route</th>
+              <th className="col-route">Entity → Hire</th>
               <th className="col-path">Path</th>
               <th className="col-expected">Expected</th>
               <th className="col-ee">Employment</th>

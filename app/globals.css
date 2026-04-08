@@ -136,11 +136,11 @@ tr.has-error { cursor: pointer; }
 /* ID */
 .tid { color: #d2a8ff; font-weight: 600; white-space: nowrap; }
 .btn-run-single {
-  background: none; border: none; color: #8b949e; cursor: pointer;
-  font-size: 18px; padding: 2px 6px; margin-left: 8px; vertical-align: middle;
-  opacity: 0.6; transition: opacity 0.15s, color 0.15s; float: right;
+  background: none; border: none; color: #c9d1d9; cursor: pointer;
+  font-size: 22px; padding: 2px 6px; margin-left: 8px; vertical-align: middle;
+  opacity: 0.7; transition: opacity 0.15s, color 0.15s; float: right;
 }
-tr:hover .btn-run-single { opacity: 0.8; color: #c9d1d9; }
+tr:hover .btn-run-single { opacity: 0.9; color: #e6edf3; }
 .btn-run-single:hover:not(:disabled) { opacity: 1; color: #3fb950; }
 .btn-run-single:disabled { cursor: not-allowed; opacity: 0.2; color: #484f58; }
 
