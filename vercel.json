@@ -2,6 +2,9 @@
   "functions": {
     "app/api/playground/run/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/suite/run/route.ts": {
+      "maxDuration": 300
     }
   }
 }
