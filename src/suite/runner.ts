@@ -1,5 +1,5 @@
 /**
- * In-process test suite runner.
+ * In-process test suite runner (v2).
  *
  * Replaces the vitest subprocess approach so tests can run on Vercel.
  * Iterates the test matrix, calls path functions directly (same ones
