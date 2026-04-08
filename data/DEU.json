@@ -1,0 +1,10 @@
+{
+  "country_code": "DEU",
+  "country_name": "Germany",
+  "contractor": {
+    "full_name": "Test Contractor DEU",
+    "job_title": "Software Engineer",
+    "email": "test.contractor.deu@example.com"
+  },
+  "notes": "EU country. Used for Round 3 entity. Same-country COR allowed (EU exception)."
+}

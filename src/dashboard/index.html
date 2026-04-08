@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test Contractor Demo App</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+    background: #0d1117;
+    color: #c9d1d9;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+  }
+  header h1 { font-size: 15px; font-weight: 600; color: #58a6ff; }
+  .tabs { display: flex; gap: 4px; }
+  .tab {
+    background: none; border: 1px solid transparent; border-radius: 6px;
+    padding: 4px 12px; font-family: inherit; font-size: 13px;
+    color: #8b949e; cursor: pointer;
+  }
+  .tab:hover { color: #c9d1d9; }
+  .tab.active { background: #0d1117; border-color: #30363d; color: #58a6ff; }
+  .hdr-right { display: flex; align-items: center; gap: 12px; }
+  .status { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .status .dot { width: 8px; height: 8px; border-radius: 50%; background: #484f58; }
+  .status.connected .dot { background: #3fb950; }
+  .status.disconnected .dot { background: #f85149; }
+
+  /* Suite view */
+  #suite-view { height: calc(100vh - 45px); display: flex; flex-direction: column; }
+  .suite-toolbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 20px; background: #161b22; border-bottom: 1px solid #30363d;
+  }
+  .btn-run-suite {
+    background: #238636; border: 1px solid #2ea043; border-radius: 6px;
+    color: #fff; padding: 6px 16px; font-family: inherit; font-size: 13px;
+    font-weight: 600; cursor: pointer;
+  }
+  .btn-run-suite:hover { background: #2ea043; }
+  .btn-run-suite:disabled { background: #21262d; border-color: #30363d; color: #484f58; cursor: not-allowed; }
+  .suite-status { color: #8b949e; font-size: 12px; }
+  .suite-counts { margin-left: auto; display: flex; gap: 12px; font-size: 12px; }
+  .suite-counts .pass { color: #3fb950; }
+  .suite-counts .fail { color: #f85149; }
+  .suite-counts .skip { color: #d29922; }
+  .suite-counts .time { color: #8b949e; }
+
+  .table-wrap { flex: 1; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { position: sticky; top: 0; z-index: 1; }
+  th {
+    background: #161b22; padding: 8px 10px; text-align: left;
+    font-size: 11px; font-weight: 600; color: #8b949e;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid #30363d;
+  }
+  td {
+    padding: 6px 10px; border-bottom: 1px solid #21262d;
+    vertical-align: top; font-size: 12px;
+  }
+  tr.section-header td {
+    background: #161b22; font-weight: 600; color: #8b949e;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 10px 10px 6px;
+  }
+  tr:hover:not(.section-header) td { background: #161b2299; }
+
+  /* Status column */
+  .st { width: 20px; text-align: center; }
+  .st-pending { color: #484f58; }
+  .st-running { color: #d29922; }
+  .st-pass { color: #3fb950; }
+  .st-fail { color: #f85149; }
+  .st-skip { color: #d29922; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .st-running { animation: pulse 1s infinite; }
+
+  .tid { color: #d2a8ff; font-weight: 600; white-space: nowrap; }
+  .desc { color: #c9d1d9; }
+  .entity-col { color: #d29922; white-space: nowrap; }
+  .hire-col { color: #3fb950; white-space: nowrap; }
+  .ir35-col { color: #8b949e; white-space: nowrap; }
+  .path-col { white-space: nowrap; }
+  .path-cm { color: #58a6ff; }
+  .path-cmplus { color: #a371f7; }
+  .path-cor { color: #f0883e; }
+  .path-ir35 { color: #db6d28; }
+  .path-eor { color: #8b949e; }
+  .path-ro { color: #484f58; }
+  /* Runtime data columns */
+  .rt-ee a { color: #58a6ff; text-decoration: none; font-size: 11px; word-break: break-all; }
+  .rt-ee a:hover { text-decoration: underline; }
+  .rt-entity a { color: #d29922; text-decoration: none; }
+  .rt-entity a:hover { text-decoration: underline; }
+  .rt-time { color: #484f58; font-size: 11px; white-space: nowrap; }
+  .rt-error { color: #f85149; font-size: 11px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Expected / Outcome multi-line cells */
+  .expected-col, .outcome-col { font-size: 11px; line-height: 1.6; color: #8b949e; }
+  .exp-line, .out-line { white-space: nowrap; }
+  .exp-label, .out-label { color: #484f58; }
+  .out-match { color: #3fb950; }
+  .out-mismatch { color: #f85149; }
+  .out-value { color: #d2a8ff; }
+
+  /* Playground styles (kept from before) */
+  .playground-grid {
+    display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr auto;
+    gap: 1px; background: #30363d; height: calc(100vh - 45px);
+  }
+  .panel { background: #0d1117; padding: 12px 16px; overflow-y: auto; }
+  .panel h2 {
+    font-size: 12px; font-weight: 600; color: #8b949e; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 8px; position: sticky; top: 0;
+    background: #0d1117; padding-bottom: 4px;
+  }
+  .pg-form label {
+    display: block; color: #8b949e; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-top: 10px; margin-bottom: 3px;
+  }
+  .pg-form label:first-child { margin-top: 0; }
+  .pg-form select, .pg-form input[type="text"] {
+    width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; padding: 6px 8px; font-family: inherit; font-size: 13px;
+  }
+  .pg-form select:focus, .pg-form input:focus { border-color: #58a6ff; outline: none; }
+  .pg-form select:disabled, .pg-form input:disabled { opacity: 0.4; cursor: not-allowed; }
+  .ir35-group { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+  .ir35-group label {
+    display: inline-flex; align-items: center; gap: 4px; text-transform: none;
+    font-size: 13px; color: #c9d1d9; margin: 0; cursor: pointer;
+  }
+  .ir35-group input[type="radio"] { accent-color: #58a6ff; }
+  .ir35-group.disabled label { color: #484f58; cursor: not-allowed; }
+  .pg-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .btn-run {
+    flex: 1; background: #238636; border: 1px solid #2ea043; border-radius: 6px;
+    color: #fff; padding: 8px 16px; font-family: inherit; font-size: 13px;
+    font-weight: 600; cursor: pointer;
+  }
+  .btn-run:hover { background: #2ea043; }
+  .btn-run:disabled { background: #21262d; border-color: #30363d; color: #484f58; cursor: not-allowed; }
+  .btn-cancel {
+    background: none; border: 1px solid #30363d; border-radius: 6px;
+    color: #f85149; padding: 8px 12px; font-family: inherit; font-size: 12px; cursor: pointer;
+  }
+  .btn-cancel:hover { border-color: #f85149; }
+  .btn-cancel:disabled { color: #484f58; border-color: #21262d; cursor: not-allowed; }
+  #pg-trace { font-size: 12px; line-height: 1.6; overflow-y: auto; }
+  .trace-line { padding: 1px 0; }
+  .trace-line .step-label { color: #d29922; }
+  .trace-line.done { color: #3fb950; }
+  .trace-line.error { color: #f85149; }
+  .trace-line.side { color: #8b949e; font-style: italic; }
+  .trace-line.side .step-label { color: #8b949e; }
+  #pg-result { grid-column: 1 / -1; }
+  .result-products { font-size: 16px; color: #d2a8ff; font-weight: 600; }
+  .result-meta { color: #8b949e; font-size: 12px; margin-top: 4px; }
+  .result-meta .id { color: #58a6ff; cursor: pointer; }
+  .waiting { color: #484f58; font-style: italic; }
+
+  /* ==================== MEGA RUN STYLES ==================== */
+  .mega-layout { display: flex; flex-direction: column; height: calc(100vh - 45px); }
+  .mega-config {
+    background: #161b22; border-bottom: 1px solid #30363d;
+    padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
+  }
+  .mega-config .field { display: flex; flex-direction: column; gap: 3px; }
+  .mega-config .field label {
+    font-size: 10px; font-weight: 600; color: #8b949e;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .mega-config select, .mega-config input[type="number"] {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; padding: 5px 8px; font-family: inherit; font-size: 12px; min-width: 120px;
+  }
+  .mega-config select:focus, .mega-config input:focus { border-color: #58a6ff; outline: none; }
+  .mega-products { display: flex; gap: 10px; align-items: center; }
+  .mega-products label {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; color: #c9d1d9; cursor: pointer;
+  }
+  .mega-products input[type="checkbox"] { accent-color: #58a6ff; }
+  .mega-info {
+    margin-left: auto; display: flex; align-items: center; gap: 12px;
+    font-size: 12px; color: #8b949e;
+  }
+  .mega-info .matrix-size { color: #d2a8ff; font-weight: 600; }
+  .btn-mega {
+    background: #238636; border: 1px solid #2ea043; border-radius: 6px;
+    color: #fff; padding: 6px 16px; font-family: inherit; font-size: 13px;
+    font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .btn-mega:hover { background: #2ea043; }
+  .btn-mega:disabled { background: #21262d; border-color: #30363d; color: #484f58; cursor: not-allowed; }
+
+  .mega-progress {
+    background: #161b22; border-bottom: 1px solid #30363d;
+    padding: 8px 16px; display: none; align-items: center; gap: 12px; font-size: 12px;
+  }
+  .mega-progress .bar-wrap {
+    flex: 1; height: 6px; background: #21262d; border-radius: 3px; overflow: hidden;
+  }
+  .mega-progress .bar-fill {
+    height: 100%; background: #238636; border-radius: 3px; transition: width 0.3s;
+  }
+  .mega-progress .progress-text { color: #8b949e; white-space: nowrap; }
+  .mega-progress .progress-current { color: #d29922; white-space: nowrap; font-size: 11px; }
+  .mega-summary {
+    display: flex; gap: 12px; font-size: 12px;
+  }
+  .mega-summary .ms-ok { color: #3fb950; }
+  .mega-summary .ms-err { color: #f85149; }
+  .mega-summary .ms-na { color: #484f58; }
+  .mega-summary .ms-skip { color: #d29922; }
+  .mega-summary .ms-time { color: #8b949e; }
+
+  .mega-filters {
+    background: #0d1117; border-bottom: 1px solid #21262d;
+    padding: 6px 16px; display: flex; gap: 10px; align-items: center; font-size: 12px;
+  }
+  .mega-filters select, .mega-filters input[type="text"] {
+    background: #161b22; border: 1px solid #30363d; border-radius: 4px;
+    color: #c9d1d9; padding: 4px 8px; font-family: inherit; font-size: 12px;
+  }
+  .mega-filters label { color: #8b949e; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
+
+  .mega-table-wrap { flex: 1; overflow: auto; }
+  #mega-table { width: 100%; border-collapse: collapse; }
+  #mega-table thead { position: sticky; top: 0; z-index: 1; }
+  #mega-table th {
+    background: #161b22; padding: 8px 10px; text-align: left;
+    font-size: 11px; font-weight: 600; color: #8b949e;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid #30363d;
+  }
+  #mega-table td {
+    padding: 5px 10px; border-bottom: 1px solid #21262d;
+    font-size: 12px; vertical-align: top;
+  }
+  #mega-table tr:hover td { background: #161b2299; }
+  #mega-table tr.mega-detail td { background: #161b22; font-size: 11px; color: #8b949e; }
+  .mega-st-success { color: #3fb950; }
+  .mega-st-error { color: #f85149; }
+  .mega-st-unavailable { color: #484f58; }
+  .mega-st-skipped { color: #d29922; }
+  .mega-st-running { color: #d29922; animation: pulse 1s infinite; }
+  .mega-last-run { padding: 8px 16px; font-size: 12px; color: #484f58; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Test Contractor Demo App</h1>
+  <div class="tabs">
+    <button class="tab active" data-mode="suite" onclick="switchMode('suite')">Test Suite</button>
+    <button class="tab" data-mode="playground" onclick="switchMode('playground')">Playground</button>
+    <!-- <button class="tab" data-mode="mega" onclick="switchMode('mega')">Mega Run</button> -->
+  </div>
+  <div class="hdr-right">
+    <span id="company-info" style="color:#8b949e;font-size:12px;"></span>
+    <div class="status" id="status">
+      <span class="dot"></span>
+      <span class="label">Connecting...</span>
+    </div>
+  </div>
+</header>
+
+<!-- ==================== TEST SUITE VIEW ==================== -->
+<div id="suite-view">
+  <div class="suite-toolbar">
+    <button class="btn-run-suite" id="btn-run-suite" onclick="runSuite()">Run All Tests</button>
+    <span class="suite-status" id="suite-status">Ready</span>
+    <div class="suite-counts" id="suite-counts" style="display:none">
+      <span class="pass" id="sc-pass"></span>
+      <span class="fail" id="sc-fail"></span>
+      <span class="skip" id="sc-skip"></span>
+      <span class="time" id="sc-time"></span>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table id="suite-table">
+      <thead>
+        <tr>
+          <th class="st"></th>
+          <th>ID</th>
+          <th>Description</th>
+          <th>Entity</th>
+          <th>Hire</th>
+          <th>Path</th>
+          <th>IR35</th>
+          <th>Expected</th>
+          <th>Employment</th>
+          <th>Outcome</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody id="suite-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ==================== PLAYGROUND VIEW ==================== -->
+<div id="playground-view" style="display: none;">
+<div class="playground-grid">
+  <div class="panel pg-form">
+    <h2>Configuration</h2>
+    <label for="pg-entity">Entity Country</label>
+    <select id="pg-entity"><option value="">Loading...</option></select>
+    <label for="pg-hire">Country of Hire</label>
+    <select id="pg-hire"><option value="">Loading...</option></select>
+    <label for="pg-name">Full Name</label>
+    <input type="text" id="pg-name" value="Test Contractor">
+    <label for="pg-email">Email</label>
+    <input type="text" id="pg-email" value="test@example.com">
+    <label for="pg-job">Job Title</label>
+    <input type="text" id="pg-job" value="Software Engineer">
+    <label>IR35 Status</label>
+    <div class="ir35-group" id="ir35-group">
+      <label><input type="radio" name="ir35" value="" checked> None</label>
+      <label><input type="radio" name="ir35" value="outside"> Outside</label>
+      <label><input type="radio" name="ir35" value="inside"> Inside</label>
+      <label><input type="radio" name="ir35" value="exempt"> Exempt</label>
+    </div>
+    <label>Nationality</label>
+    <div class="ir35-group" id="nationality-group">
+      <label><input type="radio" name="nationality" value="" checked> None</label>
+      <label><input type="radio" name="nationality" value="national"> National</label>
+      <label><input type="radio" name="nationality" value="non_national"> Non-National</label>
+    </div>
+    <label for="pg-product">Target Product</label>
+    <select id="pg-product">
+      <option value="">(just show available)</option>
+      <option value="CM">CM (standard)</option>
+      <option value="CM+">CM+ (plus)</option>
+      <option value="COR">COR</option>
+    </select>
+    <div class="pg-actions">
+      <button class="btn-run" id="pg-run" onclick="pgRun()">Run Scenario</button>
+      <button class="btn-cancel" id="pg-cancel" onclick="pgCancel()" disabled>Cancel EE</button>
+    </div>
+  </div>
+  <div class="panel" id="pg-trace-panel">
+    <h2>Live Trace</h2>
+    <div id="pg-trace"><div class="waiting">Configure inputs and click Run</div></div>
+  </div>
+  <div class="panel" id="pg-result">
+    <h2>Result</h2>
+    <div id="pg-result-content"><div class="waiting">No results yet</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== MEGA RUN VIEW ==================== -->
+<div id="mega-view" style="display: none;">
+<div class="mega-layout">
+  <div class="mega-config" id="mega-config">
+    <div class="field">
+      <label>Mode</label>
+      <select id="mega-mode">
+        <option value="availability">Availability Scan</option>
+        <option value="full">Full Flow</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Concurrency</label>
+      <input type="number" id="mega-concurrency" value="1" min="1" max="10" style="width:60px;">
+    </div>
+    <div class="field">
+      <label>Entities</label>
+      <span style="color:#d29922;font-size:12px;" id="mega-entity-count">All eor_onboarding</span>
+    </div>
+    <div class="field">
+      <label>Contractors</label>
+      <span style="color:#3fb950;font-size:12px;" id="mega-contractor-count">All with products</span>
+    </div>
+    <div class="field">
+      <label>Products</label>
+      <div class="mega-products">
+        <label><input type="checkbox" id="mega-p-cm" checked> CM</label>
+        <label><input type="checkbox" id="mega-p-cmplus" checked> CM+</label>
+        <label><input type="checkbox" id="mega-p-cor" checked> COR</label>
+      </div>
+    </div>
+    <div class="mega-info">
+      <span class="matrix-size" id="mega-matrix-size"></span>
+      <button class="btn-mega" id="mega-btn-start" onclick="megaStart()">Start Mega Run</button>
+    </div>
+  </div>
+
+  <div class="mega-progress" id="mega-progress">
+    <div class="mega-summary" id="mega-counts">
+      <span class="ms-ok" id="ms-ok"></span>
+      <span class="ms-err" id="ms-err"></span>
+      <span class="ms-na" id="ms-na"></span>
+      <span class="ms-skip" id="ms-skip"></span>
+    </div>
+    <div class="bar-wrap"><div class="bar-fill" id="mega-bar"></div></div>
+    <span class="progress-text" id="mega-progress-text"></span>
+    <span class="progress-current" id="mega-progress-current"></span>
+  </div>
+
+  <div class="mega-filters">
+    <label>Show:</label>
+    <select id="mega-filter-status" onchange="megaRenderTable()">
+      <option value="">All</option>
+      <option value="success">Success</option>
+      <option value="error">Errors</option>
+      <option value="unavailable">Unavailable</option>
+    </select>
+    <label>Entity:</label>
+    <input type="text" id="mega-filter-entity" placeholder="e.g. GBR" oninput="megaRenderTable()" style="width:70px;">
+    <label>Contractor:</label>
+    <input type="text" id="mega-filter-contractor" placeholder="e.g. AUS" oninput="megaRenderTable()" style="width:70px;">
+    <label>Product:</label>
+    <select id="mega-filter-product" onchange="megaRenderTable()">
+      <option value="">All</option>
+      <option value="CM">CM</option>
+      <option value="CM+">CM+</option>
+      <option value="COR">COR</option>
+    </select>
+  </div>
+
+  <div class="mega-last-run" id="mega-last-run"></div>
+  <div id="mega-load-full" style="display:none;padding:4px 16px;">
+    <button onclick="loadFullMegaResults()" style="background:none;border:1px solid #30363d;border-radius:4px;color:#58a6ff;padding:4px 12px;font-size:12px;cursor:pointer;font-family:inherit;">Load full results from last run</button>
+  </div>
+
+  <div class="mega-table-wrap">
+    <table id="mega-table">
+      <thead>
+        <tr>
+          <th class="st"></th>
+          <th>Entity</th>
+          <th>Contractor</th>
+          <th>Product</th>
+          <th>Step</th>
+          <th>Available Products</th>
+          <th>Employment</th>
+          <th>Error</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody id="mega-tbody"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const isHosted = !['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+// ==================== TEST CASE MATRIX ====================
+// This is the single source of truth for all test cases.
+const TEST_MATRIX = [
+  { section: 'CM Path — Round 1 (UK Entity)' },
+  { id:'A1(CM)',  desc:'Happy path — standard product available for PRT contractor', entity:'GBR', hire:'PRT', path:'CM',       ir35:'',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM'], questionnaire:null }},
+  { id:'B2',      desc:'Country with no COR support (BHR) — CM+CM+ on pricing, COR absent', entity:'GBR', hire:'BHR', path:'CM',  ir35:'',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus'], subs:['CM','CM+'], questionnaire:null }},
+  { id:'B6',      desc:'Same-country (GBR) — COR absent, standard/plus shown',      entity:'GBR', hire:'GBR', path:'CM',       ir35:'',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM','CM+'], questionnaire:null }},
+  { id:'D4',      desc:'UK contractor — IR35 inside — standard survives',            entity:'GBR', hire:'GBR', path:'CM',       ir35:'inside',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM'], questionnaire:null }},
+
+  { section: 'CM Path — Round 2 (USA Entity)' },
+  { id:'D2',      desc:'UK contractor — IR35 inside — only standard remains',        entity:'USA', hire:'GBR', path:'CM',       ir35:'inside',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM'], questionnaire:null }},
+  { id:'D3',      desc:'UK contractor — IR35 inside — only CM remains',              entity:'USA', hire:'GBR', path:'CM',       ir35:'inside',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM'], questionnaire:null }},
+
+  { section: 'CM+ Path — Round 1 (UK Entity)' },
+  { id:'A1(CM+)', desc:'Happy path — plus product available for PRT contractor',     entity:'GBR', hire:'PRT', path:'CM+',      ir35:'',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM','CM+','COR'], questionnaire:null }},
+
+  { section: 'COR+IR35 Path — Round 2 (USA Entity)' },
+  { id:'D1',      desc:'UK contractor — IR35 outside — all 3 products, COR selected',entity:'USA', hire:'GBR', path:'COR+IR35', ir35:'outside',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM','CM+','COR'], questionnaire:{ isBlocking:false }}},
+  { id:'D5',      desc:'UK contractor — IR35 exempt — all 3 products available',     entity:'USA', hire:'GBR', path:'COR+IR35', ir35:'exempt',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM','CM+','COR'], questionnaire:{ isBlocking:false }}},
+  { id:'D6',      desc:'UK contractor — IR35 outside — SDS upload, products avail',  entity:'USA', hire:'GBR', path:'COR+IR35', ir35:'outside',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM','CM+','COR'], questionnaire:{ isBlocking:false }}},
+
+  { section: 'COR Path — Round 1 (UK Entity)' },
+  { id:'A1(COR)', desc:'Happy path — COR available, flow completes for PRT',         entity:'GBR', hire:'PRT', path:'COR',      ir35:'',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM','CM+','COR'], questionnaire:{ isBlocking:false }}},
+  { id:'G1',      desc:'COR questionnaire — passes with non-blocking answers',       entity:'GBR', hire:'PRT', path:'COR',      ir35:'',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM','CM+','COR'], questionnaire:{ isBlocking:false }}},
+
+  { section: 'COR Path — Round 2 (USA Entity)' },
+  { id:'B5',      desc:'Same-country COR (USA) — COR present (USA exception)',        entity:'USA', hire:'USA', path:'COR',      ir35:'',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM','CM+','COR'], questionnaire:null }},
+
+  { section: 'COR Path — Round 3 (Germany Entity)' },
+  { id:'B4',      desc:'Same-country COR (DEU) — COR present (EU exception)',        entity:'DEU', hire:'DEU', path:'COR',      ir35:'',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM','CM+','COR'], questionnaire:null }},
+
+  { section: 'EOR Fallback — Round 4 (India Entity)' },
+  { id:'B3',      desc:'India entity + India contractor — no products, EOR fallback', entity:'IND', hire:'IND', path:'EOR',      ir35:'',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard'], subs:[], questionnaire:null }},
+  { id:'F1',      desc:'India entity + PRT contractor — only COR (30-country rule)', entity:'IND', hire:'PRT', path:'EOR',      ir35:'',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['COR'], questionnaire:null }},
+
+  { section: 'EOR Fallback — Round 2 (USA Entity)' },
+  { id:'G2',      desc:'COR blocked by questionnaire — blocking answers',             entity:'USA', hire:'PRT', path:'EOR',      ir35:'',
+    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM','CM+','COR'], questionnaire:{ isBlocking:true }}},
+
+  { section: 'Read-Only' },
+  { id:'B1',      desc:'Sanctioned countries absent from country list',               entity:'GBR', hire:'—',   path:'Read-only',ir35:'',
+    expected:{ country:null, subs:null, questionnaire:null, note:'IRN,CUB,PRK,SYR absent' }},
+  { id:'B8',      desc:'Country with no CSA template — not visible or no products',   entity:'GBR', hire:'—',   path:'Read-only',ir35:'',
+    expected:{ country:null, subs:null, questionnaire:null, note:'Countries have fields' }},
+];
+
+// Runtime state per test
+const testState = new Map(); // id -> { status, duration, eeId, eeEmail, entityId, products, countryProducts, questionnaireResult, ir35Status, error }
+let suiteRunning = false;
+
+const SANDBOX_BASE = 'https://employ.partners.remote-sandbox.com/dashboard';
+
+// Buffer: collect events between test:result events. Flushed on next test:result.
+const eventBuffer = { eeId: null, eeEmail: null, products: null, countryProducts: null, questionnaireResult: null, ir35Status: null, eligibility: null };
+let lastEntityId = null; // persists across tests (entity swaps in beforeAll affect all tests in the round)
+
+function pathClass(p) {
+  if (p === 'CM') return 'path-cm';
+  if (p === 'CM+') return 'path-cmplus';
+  if (p === 'COR') return 'path-cor';
+  if (p === 'COR+IR35') return 'path-ir35';
+  if (p === 'EOR') return 'path-eor';
+  return 'path-ro';
+}
+
+function statusIcon(s) {
+  if (s === 'pass') return '<span class="st-pass">✓</span>';
+  if (s === 'fail') return '<span class="st-fail">✗</span>';
+  if (s === 'run')  return '<span class="st-running">●</span>';
+  if (s === 'skip') return '<span class="st-skip">◌</span>';
+  return '<span class="st-pending">○</span>';
+}
+
+function renderExpected(exp) {
+  if (!exp) return '';
+  if (exp.note) return `<span class="exp-line">${exp.note}</span>`;
+  const lines = [];
+  if (exp.eligibility) {
+    const elig = [exp.eligibility.standard && 'CM', exp.eligibility.plus && 'CM+', exp.eligibility.cor && 'COR'].filter(Boolean);
+    lines.push(`<span class="exp-line"><span class="exp-label">Elig:</span> ${elig.join(', ') || 'none'}</span>`);
+  }
+  if (exp.country) lines.push(`<span class="exp-line"><span class="exp-label">Country:</span> ${exp.country.join(', ')}</span>`);
+  if (exp.subs) lines.push(`<span class="exp-line"><span class="exp-label">Subs:</span> ${exp.subs.join(', ') || 'none'}</span>`);
+  if (exp.questionnaire !== undefined && exp.questionnaire !== null) {
+    lines.push(`<span class="exp-line"><span class="exp-label">Quiz:</span> ${exp.questionnaire.isBlocking ? 'blocking' : 'non-blocking'}</span>`);
+  }
+  return lines.join('<br>');
+}
+
+function renderOutcome(s, exp) {
+  if (!s.status || s.status === 'skip') return '';
+  if (exp && exp.note) return ''; // read-only tests have no runtime outcome
+  const lines = [];
+  if (s.eligibility) {
+    const actual = [s.eligibility.standard && 'CM', s.eligibility.plus && 'CM+', s.eligibility.cor && 'COR'].filter(Boolean);
+    const expElig = exp && exp.eligibility ? [exp.eligibility.standard && 'CM', exp.eligibility.plus && 'CM+', exp.eligibility.cor && 'COR'].filter(Boolean) : null;
+    const match = expElig ? arrMatch(expElig, actual) : null;
+    const cls = match === null ? 'out-value' : match ? 'out-match' : 'out-mismatch';
+    const icon = match === null ? '' : match ? ' ✓' : ' ✗';
+    lines.push(`<span class="out-line"><span class="out-label">Elig:</span> <span class="${cls}">${actual.join(', ') || 'none'}${icon}</span></span>`);
+  }
+  if (s.countryProducts) {
+    const match = exp && exp.country ? arrMatch(exp.country, s.countryProducts) : null;
+    const cls = match === null ? 'out-value' : match ? 'out-match' : 'out-mismatch';
+    const icon = match === null ? '' : match ? ' ✓' : ' ✗';
+    lines.push(`<span class="out-line"><span class="out-label">Country:</span> <span class="${cls}">${s.countryProducts.join(', ')}${icon}</span></span>`);
+  }
+  if (s.products) {
+    const match = exp && exp.subs ? arrMatch(exp.subs, s.products) : null;
+    const cls = match === null ? 'out-value' : match ? 'out-match' : 'out-mismatch';
+    const icon = match === null ? '' : match ? ' ✓' : ' ✗';
+    lines.push(`<span class="out-line"><span class="out-label">Subs:</span> <span class="${cls}">${s.products.join(', ') || 'none'}${icon}</span></span>`);
+  }
+  if (s.questionnaireResult !== undefined && s.questionnaireResult !== null) {
+    const actual = s.questionnaireResult ? 'blocking' : 'non-blocking';
+    const match = exp && exp.questionnaire !== null ? (exp.questionnaire.isBlocking === s.questionnaireResult) : null;
+    const cls = match === null ? 'out-value' : match ? 'out-match' : 'out-mismatch';
+    const icon = match === null ? '' : match ? ' ✓' : ' ✗';
+    lines.push(`<span class="out-line"><span class="out-label">Quiz:</span> <span class="${cls}">${actual}${icon}</span></span>`);
+  }
+  return lines.join('<br>');
+}
+
+function arrMatch(a, b) {
+  if (!a || !b) return null;
+  const sa = [...a].sort().join(',');
+  const sb = [...b].sort().join(',');
+  return sa === sb;
+}
+
+function renderTable() {
+  const tbody = $('suite-tbody');
+  tbody.innerHTML = '';
+  for (const row of TEST_MATRIX) {
+    if (row.section) {
+      tbody.innerHTML += `<tr class="section-header"><td colspan="11">${row.section}</td></tr>`;
+      continue;
+    }
+    const s = testState.get(row.id) || {};
+    const time = s.duration ? (s.duration < 1000 ? s.duration + 'ms' : (s.duration/1000).toFixed(1) + 's') : '';
+
+    // Employment: full UUID as hyperlink
+    let eeCell = '';
+    if (s.eeId) {
+      eeCell = `<span class="rt-ee"><a href="${SANDBOX_BASE}/people/${s.eeId}/?selectedTab=profile" target="_blank" title="${s.eeId}">${s.eeId}</a></span>`;
+    }
+
+    // Entity: country code, becomes a link when entity UUID is available
+    let entityCell = row.entity;
+    if (s.entityId) {
+      entityCell = `<span class="rt-entity"><a href="${SANDBOX_BASE}/legal-entities/${s.entityId}/?selectedTab=details" target="_blank" title="${s.entityId}">${row.entity}</a></span>`;
+    }
+
+    tbody.innerHTML += `<tr data-testid="${row.id}">
+      <td class="st">${statusIcon(s.status)}</td>
+      <td class="tid">${row.id}</td>
+      <td class="desc">${row.desc}</td>
+      <td class="entity-col">${entityCell}</td>
+      <td class="hire-col">${row.hire}</td>
+      <td><span class="${pathClass(row.path)}">${row.path}</span></td>
+      <td class="ir35-col">${row.ir35 || '—'}</td>
+      <td class="expected-col">${renderExpected(row.expected)}</td>
+      <td>${eeCell}</td>
+      <td class="outcome-col">${renderOutcome(s, row.expected)}</td>
+      <td class="rt-time">${time}</td>
+    </tr>`;
+    if (s.error) {
+      tbody.innerHTML += `<tr><td></td><td colspan="10" class="rt-error">${s.error}</td></tr>`;
+    }
+  }
+}
+
+// Initial render
+renderTable();
+
+// ==================== SUITE RUNNER ====================
+
+async function runSuite() {
+  $('btn-run-suite').disabled = true;
+  $('btn-run-suite').textContent = 'Running...';
+  $('suite-status').textContent = 'Starting tests...';
+  $('suite-counts').style.display = 'none';
+  suiteRunning = true;
+  // Clear runtime data
+  testState.clear();
+  eventBuffer.eeId = null; eventBuffer.eeEmail = null;
+  eventBuffer.products = null; eventBuffer.countryProducts = null;
+  eventBuffer.questionnaireResult = null; eventBuffer.ir35Status = null;
+  eventBuffer.eligibility = null;
+  lastEntityId = null;
+  renderTable();
+
+  try {
+    const res = await fetch('/api/suite/run', { method: 'POST' });
+    if (!res.ok) {
+      const d = await res.json();
+      $('suite-status').textContent = 'Error: ' + (d.error || 'failed to start');
+      suiteDone();
+    }
+  } catch (err) {
+    $('suite-status').textContent = 'Error: ' + String(err);
+    suiteDone();
+  }
+}
+
+function suiteDone() {
+  suiteRunning = false;
+  $('btn-run-suite').disabled = false;
+  $('btn-run-suite').textContent = 'Run All Tests';
+}
+
+// ==================== Company Status ====================
+
+async function fetchCompanyStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    if (res.ok && data.name) {
+      $('company-info').textContent = data.name;
+      $('company-info').style.color = '#3fb950';
+    } else {
+      $('company-info').textContent = data.error || 'Not connected';
+      $('company-info').style.color = '#f85149';
+    }
+  } catch {
+    $('company-info').textContent = 'API unreachable';
+    $('company-info').style.color = '#f85149';
+  }
+}
+fetchCompanyStatus();
+
+// ==================== MODE SETUP ====================
+
+if (isHosted) {
+  // Hide tabs not available on Vercel (test suite, mega run)
+  document.querySelectorAll('.tab[data-mode="suite"]').forEach(t => t.style.display = 'none');
+  document.querySelectorAll('.tab[data-mode="mega"]').forEach(t => t.style.display = 'none');
+  // Hide SSE status indicator
+  $('status').style.display = 'none';
+  // Start on playground tab
+  switchMode('playground');
+}
+
+// ==================== SSE ====================
+
+function connect() {
+  const es = new EventSource('/events');
+  const statusEl = $('status');
+
+  es.addEventListener('connected', () => {
+    statusEl.className = 'status connected';
+    statusEl.querySelector('.label').textContent = 'Connected';
+  });
+
+  es.addEventListener('suite:start', () => {
+    testState.clear();
+    eventBuffer.eeId = null; eventBuffer.eeEmail = null;
+    eventBuffer.products = null; eventBuffer.countryProducts = null;
+    eventBuffer.questionnaireResult = null; eventBuffer.ir35Status = null;
+    eventBuffer.eligibility = null;
+    lastEntityId = null;
+    $('suite-status').textContent = 'Running...';
+    $('suite-counts').style.display = 'none';
+    renderTable();
+  });
+
+  es.addEventListener('suite:collected', (e) => {
+    const data = JSON.parse(e.data);
+    $('suite-status').textContent = `Collected ${data.total || 0} tests...`;
+  });
+
+  es.addEventListener('test:result', (e) => {
+    const data = JSON.parse(e.data);
+    const id = data.testId || extractTestId(data.name);
+    // Flush buffered events into this test's row
+    const s = testState.get(id) || {};
+    testState.set(id, {
+      ...s,
+      status: data.state,
+      duration: data.duration || 0,
+      error: data.error || null,
+      eeId: eventBuffer.eeId || s.eeId,
+      eeEmail: eventBuffer.eeEmail || s.eeEmail,
+      entityId: lastEntityId,
+      products: eventBuffer.products || s.products,
+      countryProducts: eventBuffer.countryProducts || s.countryProducts,
+      questionnaireResult: eventBuffer.questionnaireResult !== null ? eventBuffer.questionnaireResult : s.questionnaireResult,
+      ir35Status: eventBuffer.ir35Status || s.ir35Status,
+      eligibility: eventBuffer.eligibility || s.eligibility,
+    });
+    // Clear per-test buffer (entity persists across tests in same round)
+    eventBuffer.eeId = null; eventBuffer.eeEmail = null;
+    eventBuffer.products = null; eventBuffer.countryProducts = null;
+    eventBuffer.questionnaireResult = null; eventBuffer.ir35Status = null;
+    eventBuffer.eligibility = null;
+    renderTable();
+    // Scroll to the just-completed test
+    const row = document.querySelector(`[data-testid="${id}"]`);
+    if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  });
+
+  // Buffer employment/subscription events — flushed on next test:result
+  es.addEventListener('employment', (e) => {
+    const data = JSON.parse(e.data);
+    eventBuffer.eeId = data.id;
+    eventBuffer.eeEmail = data.email;
+  });
+
+  // Entity swap persists (beforeAll swaps affect all tests in that round)
+  es.addEventListener('entity:swap', (e) => {
+    const data = JSON.parse(e.data);
+    lastEntityId = data.entityId;
+  });
+
+  es.addEventListener('subscriptions', (e) => {
+    const data = JSON.parse(e.data);
+    eventBuffer.products = data.products;
+  });
+
+  es.addEventListener('country:eligibility', (e) => {
+    const data = JSON.parse(e.data);
+    eventBuffer.countryProducts = data.products;
+  });
+
+  es.addEventListener('questionnaire:result', (e) => {
+    const data = JSON.parse(e.data);
+    eventBuffer.questionnaireResult = data.isBlocking;
+  });
+
+  es.addEventListener('ir35:status', (e) => {
+    const data = JSON.parse(e.data);
+    eventBuffer.ir35Status = data.status;
+  });
+
+  es.addEventListener('eligibility:result', (e) => {
+    const data = JSON.parse(e.data);
+    eventBuffer.eligibility = { standard: data.standard, plus: data.plus, cor: data.cor };
+  });
+
+  es.addEventListener('suite:end', (e) => {
+    const data = JSON.parse(e.data);
+    $('suite-counts').style.display = 'flex';
+    $('sc-pass').textContent = data.passed ? `${data.passed} passed` : '';
+    $('sc-fail').textContent = data.failed ? `${data.failed} failed` : '';
+    $('sc-skip').textContent = data.skipped ? `${data.skipped} skipped` : '';
+    $('sc-time').textContent = data.duration ? (data.duration < 1000 ? data.duration + 'ms' : (data.duration/1000).toFixed(1) + 's') : '';
+    $('suite-status').textContent = 'Done';
+    suiteDone();
+  });
+
+  // Fallback: vitest process exited — always recover the button
+  es.addEventListener('suite:process-done', (e) => {
+    const data = JSON.parse(e.data);
+    if (data.exitCode !== 0 && $('suite-status').textContent !== 'Done') {
+      $('suite-status').textContent = `Exited (code ${data.exitCode})`;
+    }
+    suiteDone();
+  });
+
+  es.onerror = () => {
+    statusEl.className = 'status disconnected';
+    statusEl.querySelector('.label').textContent = 'Disconnected';
+  };
+
+  addPlaygroundListeners(es);
+  addMegaListeners(es);
+}
+
+function extractTestId(name) {
+  const m = name.match(/^([A-Z]\d+(?:\([^)]+\))?)/);
+  return m ? m[1] : name.slice(0, 20);
+}
+
+if (!isHosted) connect();
+
+// ==================== LOAD PERSISTED RESULTS ====================
+
+async function loadLastRun() {
+  try {
+    const res = await fetch('/api/last-run');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.tests) {
+      for (const [id, state] of Object.entries(data.tests)) {
+        testState.set(id, state);
+      }
+      renderTable();
+    }
+    if (data.summary) {
+      $('suite-counts').style.display = 'flex';
+      $('sc-pass').textContent = data.summary.passed ? `${data.summary.passed} passed` : '';
+      $('sc-fail').textContent = data.summary.failed ? `${data.summary.failed} failed` : '';
+      $('sc-skip').textContent = data.summary.skipped ? `${data.summary.skipped} skipped` : '';
+      $('sc-time').textContent = data.summary.duration ? (data.summary.duration < 1000 ? data.summary.duration + 'ms' : (data.summary.duration/1000).toFixed(1) + 's') : '';
+      $('suite-status').textContent = `Last run: ${new Date(data.timestamp).toLocaleString()}`;
+    }
+  } catch { /* no previous run */ }
+}
+
+if (!isHosted) loadLastRun();
+
+// ==================== TAB SWITCHING ====================
+
+function switchMode(mode) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+  $('suite-view').style.display = mode === 'suite' ? '' : 'none';
+  $('playground-view').style.display = mode === 'playground' ? '' : 'none';
+  $('mega-view').style.display = mode === 'mega' ? '' : 'none';
+  if (mode === 'playground' && !pgState.countriesLoaded) loadPlaygroundData();
+  if (mode === 'mega' && !megaState.loaded) loadMegaData();
+}
+
+// ==================== PLAYGROUND ====================
+
+const pgState = { countriesLoaded: false, contractors: {}, running: false, lastEmploymentId: null, contractorCountry: null };
+
+async function loadPlaygroundData() {
+  try {
+    const fetches = [fetch('/api/countries')];
+    if (!isHosted) fetches.push(fetch('/api/contractors'));
+    const [countriesRes, contractorsRes] = await Promise.all(fetches);
+    const countries = await countriesRes.json();
+    pgState.contractors = contractorsRes ? await contractorsRes.json() : {};
+    const entitySel = $('pg-entity');
+    const hireSel = $('pg-hire');
+    entitySel.innerHTML = '<option value="">(use current entity)</option>';
+    hireSel.innerHTML = '<option value="">Select country...</option>';
+    const sorted = Array.isArray(countries) ? countries.sort((a,b) => (a.name||'').localeCompare(b.name||'')) : [];
+    for (const c of sorted) {
+      const code = (c.code||'').toUpperCase();
+      const name = c.name || code;
+      entitySel.innerHTML += `<option value="${code}">${name} (${code})</option>`;
+      hireSel.innerHTML += `<option value="${code}">${name} (${code})</option>`;
+    }
+    hireSel.addEventListener('change', () => {
+      const code = hireSel.value;
+      const data = pgState.contractors[code];
+      if (data && data.contractor) {
+        $('pg-name').value = data.contractor.full_name || '';
+        $('pg-email').value = data.contractor.email || '';
+        $('pg-job').value = data.contractor.job_title || '';
+      }
+      updateIR35State(code);
+      updateNationalityState(code);
+    });
+    pgState.countriesLoaded = true;
+  } catch (err) { console.error('Failed to load playground data:', err); }
+}
+
+function updateIR35State(cc) {
+  const g = $('ir35-group'); const isGBR = cc === 'GBR';
+  g.classList.toggle('disabled', !isGBR);
+  g.querySelectorAll('input[type="radio"]').forEach(r => { if (r.value !== '') r.disabled = !isGBR; });
+  if (!isGBR) g.querySelector('input[value=""]').checked = true;
+}
+
+function updateNationalityState(cc) {
+  const g = $('nationality-group');
+  const natCountries = ['BHR', 'SAU', 'KWT', 'OMN', 'QAT'];
+  const show = natCountries.includes(cc);
+  g.classList.toggle('disabled', !show);
+  g.querySelectorAll('input[type="radio"]').forEach(r => { if (r.value !== '') r.disabled = !show; });
+  if (!show) g.querySelector('input[value=""]').checked = true;
+}
+
+async function pgRun() {
+  const entityCountry = $('pg-entity').value || undefined;
+  const contractorCountry = $('pg-hire').value;
+  if (!contractorCountry) { alert('Select a country of hire'); return; }
+  const ir35Radio = document.querySelector('input[name="ir35"]:checked');
+  const ir35Status = ir35Radio && ir35Radio.value ? ir35Radio.value : undefined;
+  const natRadio = document.querySelector('input[name="nationality"]:checked');
+  const nationalityStatus = natRadio && natRadio.value ? natRadio.value : undefined;
+  const targetProduct = $('pg-product').value || undefined;
+  const config = { entityCountry, contractorCountry,
+    contractor: { full_name: $('pg-name').value, job_title: $('pg-job').value, email: $('pg-email').value },
+    ir35Status, nationalityStatus, targetProduct };
+  pgState.running = true; pgState.lastEmploymentId = null;
+  pgState.contractorCountry = contractorCountry;
+  $('pg-run').disabled = true; $('pg-run').textContent = 'Running...';
+  $('pg-cancel').disabled = true; $('pg-trace').innerHTML = '';
+  $('pg-result-content').innerHTML = '<div class="waiting">Running...</div>';
+
+  if (isHosted) {
+    // Streaming mode: POST returns SSE stream directly
+    try {
+      const response = await fetch('/api/playground', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      if (!response.ok) {
+        const err = await response.text();
+        pgTraceLine('error', err || 'Failed to start');
+        pgDone();
+        return;
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop();
+        for (const part of parts) {
+          const eventMatch = part.match(/^event: (.+)$/m);
+          const dataMatch = part.match(/^data: (.+)$/m);
+          if (eventMatch && dataMatch) {
+            try { handlePlaygroundEvent(eventMatch[1], JSON.parse(dataMatch[1])); } catch {}
+          }
+        }
+      }
+    } catch (err) { pgTraceLine('error', String(err)); }
+    pgDone();
+  } else {
+    // Local mode: POST triggers run, events come via persistent EventSource
+    try {
+      const res = await fetch('/api/playground/run', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(config) });
+      const data = await res.json();
+      if (!res.ok) { pgTraceLine('error', data.error || 'Failed to start'); pgDone(); }
+    } catch (err) { pgTraceLine('error', String(err)); pgDone(); }
+  }
+}
+
+function pgTraceLine(type, text) {
+  const div = document.createElement('div');
+  div.className = `trace-line ${type}`;
+  if (type === 'error') div.innerHTML = `✗ ${text}`;
+  else if (type === 'done') div.innerHTML = `✓ ${text}`;
+  else if (type === 'side') div.innerHTML = `<span class="step-label">${text}</span>`;
+  else div.innerHTML = `<span class="step-label">→ ${text}</span>`;
+  $('pg-trace').appendChild(div);
+  $('pg-trace').scrollTop = $('pg-trace').scrollHeight;
+}
+
+function pgDone() {
+  pgState.running = false; $('pg-run').disabled = false; $('pg-run').textContent = 'Run Scenario';
+  if (pgState.lastEmploymentId) $('pg-cancel').disabled = false;
+}
+
+async function pgCancel() {
+  if (!pgState.lastEmploymentId) return;
+  $('pg-cancel').disabled = true; $('pg-cancel').textContent = 'Cancelling...';
+  try {
+    const cancelUrl = isHosted ? '/api/cancel' : '/api/playground/cancel';
+    await fetch(cancelUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ employmentId: pgState.lastEmploymentId }) });
+    pgTraceLine('done', `Cancelled employment ${pgState.lastEmploymentId.slice(0,8)}...`);
+  } catch (err) { pgTraceLine('error', 'Cancel failed: ' + String(err)); }
+  $('pg-cancel').textContent = 'Cancel EE'; pgState.lastEmploymentId = null;
+}
+
+// Shared handler for playground events (used by both EventSource and streaming modes)
+function handlePlaygroundEvent(event, data) {
+  switch (event) {
+    case 'playground:start':
+      pgState.contractorCountry = data.contractorCountry || pgState.contractorCountry;
+      pgTraceLine('step', 'Playground run started');
+      break;
+    case 'playground:step':
+      pgTraceLine(data.side ? 'side' : 'step', data.label);
+      break;
+    case 'playground:eligibility':
+      if (data.error) {
+        pgTraceLine('side', '// Eligibility: failed (non-blocking)');
+      } else {
+        const corForCountry = data.cor_supported_country_codes && data.contractorCountry
+          ? data.cor_supported_country_codes.includes(data.contractorCountry)
+          : false;
+        const products = [data.standard && 'CM', data.plus && 'CM+', corForCountry && 'COR'].filter(Boolean);
+        pgTraceLine('side', `// Eligibility: [${products.join(', ')}] (entity ${data.entityId.slice(0,8)}...)`);
+      }
+      break;
+    case 'playground:product-unavailable':
+      pgTraceLine('error', `${data.requested} not available. Available: ${data.available.join(', ') || 'none'}`);
+      break;
+    case 'playground:done':
+      pgRenderResult(data);
+      break;
+    case 'playground:error':
+      pgTraceLine('error', data.message);
+      $('pg-result-content').innerHTML = `<div style="color:#f85149;">${data.message}</div>`;
+      pgDone();
+      break;
+    case 'playground:cancelled':
+      pgTraceLine('done', `Employment ${data.employmentId.slice(0,8)}... cancelled`);
+      break;
+  }
+}
+
+function pgRenderResult(data) {
+  pgState.lastEmploymentId = data.employmentId;
+
+  let html = '';
+
+  // Eligibility + Products — always show both clearly
+  html += '<div style="display:flex;gap:24px;margin-bottom:8px;">';
+
+  html += '<div>';
+  html += '<div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Eligibility (entity)</div>';
+  if (data.eligibility) {
+    const corCodes = data.eligibility.cor_supported_country_codes || [];
+    const corForCountry = pgState.contractorCountry ? corCodes.includes(pgState.contractorCountry) : false;
+    const ep = [data.eligibility.standard && 'CM', data.eligibility.plus && 'CM+', corForCountry && 'COR'].filter(Boolean);
+    html += `<div style="color:#d2a8ff;font-size:14px;font-weight:600;">${ep.join('  ·  ') || 'None'}</div>`;
+  } else {
+    html += '<div style="color:#484f58;font-size:14px;">—</div>';
+  }
+  html += '</div>';
+
+  html += '<div>';
+  html += '<div style="color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Products (subscription)</div>';
+  html += `<div style="color:#3fb950;font-size:14px;font-weight:600;">${data.products && data.products.length ? data.products.join('  ·  ') : 'None'}</div>`;
+  html += '</div>';
+
+  html += '</div>';
+
+  if (data.stoppedAt) {
+    html += `<div style="color:#f85149;margin-top:8px;font-weight:600;">Stopped at ${data.stoppedAt}</div>`;
+    html += `<div style="color:#8b949e;font-size:12px;margin-top:4px;">${data.stoppedReason || ''}</div>`;
+    pgTraceLine('error', data.stoppedReason || 'Stopped');
+  } else if (data.invited) {
+    html += '<div style="margin-top:8px;">';
+    html += `<div style="color:#3fb950;">✓ ${data.selectedProduct || 'CM'} selected</div>`;
+    html += `<div style="color:#3fb950;">✓ Contract details submitted</div>`;
+    html += `<div style="color:#3fb950;">✓ Contract signed</div>`;
+    html += `<div style="color:#3fb950;">✓ ${data.inviteType === 'cor-reserve' ? 'COR reserve created' : 'Contractor invited'}</div>`;
+    html += '</div>';
+    pgTraceLine('done', `Full flow complete! ${data.inviteType === 'cor-reserve' ? 'COR reserve created' : 'Contractor invited'}`);
+  } else {
+    pgTraceLine('done', `Done! Products: ${(data.products || []).join(', ') || '(none)'}`);
+  }
+
+  const eeLink = `<a href="https://employ.partners.remote-sandbox.com/dashboard/people/${data.employmentId}/?selectedTab=profile" target="_blank" style="color:#58a6ff;text-decoration:none;">${data.employmentId}</a>`;
+  html += `<div class="result-meta" style="margin-top:8px;">Employment: ${eeLink}`;
+  if (data.entityId) {
+    const entityLink = `<a href="https://employ.partners.remote-sandbox.com/dashboard/legal-entities/${data.entityId}/?selectedTab=details" target="_blank" style="color:#d29922;text-decoration:none;">${data.entityId}</a>`;
+    html += ` · Entity: ${entityLink}`;
+  }
+  html += '</div>';
+
+  if (data.subscriptions && data.subscriptions.length) {
+    html += '<div style="margin-top: 8px;">';
+    for (const s of data.subscriptions) {
+      const name = s.product && s.product.short_name ? s.product.short_name : s.product;
+      const price = s.price && s.price.amount ? (s.price.amount / 100).toFixed(2) : '?';
+      html += `<div style="color:#8b949e;font-size:12px;">${name} — $${price}/mo</div>`;
+    }
+    html += '</div>';
+  }
+
+  $('pg-result-content').innerHTML = html;
+  pgDone();
+}
+
+function addPlaygroundListeners(es) {
+  const events = ['playground:start', 'playground:step', 'playground:eligibility',
+    'playground:product-unavailable', 'playground:done', 'playground:error', 'playground:cancelled'];
+  for (const evt of events) {
+    es.addEventListener(evt, (e) => handlePlaygroundEvent(evt, JSON.parse(e.data)));
+  }
+}
+
+// ==================== MEGA RUN ====================
+
+const megaState = {
+  loaded: false,
+  running: false,
+  results: [],       // MegaCellResult[]
+  plan: null,        // { entities, contractors, products, totalCombinations }
+  countryProducts: {}, // countryCode -> string[]
+  counts: { success: 0, error: 0, unavailable: 0, skipped: 0 },
+  currentEntity: null,
+};
+
+async function loadMegaData() {
+  megaState.loaded = true;
+  // Check running status
+  try {
+    const statusRes = await fetch('/api/mega/status');
+    const statusData = await statusRes.json();
+    if (statusData.running) {
+      megaState.running = true;
+      $('mega-btn-start').disabled = true;
+      $('mega-btn-start').textContent = 'Running...';
+      $('mega-progress').style.display = 'flex';
+    }
+  } catch {}
+  // Load last run summary
+  loadLastMegaRun();
+}
+
+async function loadLastMegaRun() {
+  try {
+    const res = await fetch('/api/mega/last');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.summary) {
+      const s = data.summary;
+      const ago = timeAgo(data.timestamp);
+      $('mega-last-run').innerHTML = `Last run: ${ago} &mdash; ${s.success} success, ${s.error} errors, ${s.unavailable} unavailable (${formatDuration(s.duration)})`;
+      if (!megaState.running && megaState.results.length === 0) {
+        $('mega-load-full').style.display = '';
+      }
+    }
+  } catch {}
+}
+
+async function loadFullMegaResults() {
+  try {
+    const res = await fetch('/api/mega/last?full=true');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.results) {
+      megaState.results = data.results;
+      megaState.counts = {
+        success: data.summary.success,
+        error: data.summary.error,
+        unavailable: data.summary.unavailable,
+        skipped: data.summary.skipped,
+      };
+      $('mega-load-full').style.display = 'none';
+      $('mega-progress').style.display = 'flex';
+      megaRenderTable();
+      megaUpdateCounts();
+    }
+  } catch {}
+}
+
+async function megaStart() {
+  const products = [];
+  if ($('mega-p-cm').checked) products.push('CM');
+  if ($('mega-p-cmplus').checked) products.push('CM+');
+  if ($('mega-p-cor').checked) products.push('COR');
+  if (!products.length) { alert('Select at least one product'); return; }
+
+  const config = {
+    entityCountries: [],
+    contractorCountries: [],
+    products,
+    fullFlow: $('mega-mode').value === 'full',
+    concurrency: parseInt($('mega-concurrency').value) || 1,
+  };
+
+  megaState.results = [];
+  megaState.counts = { success: 0, error: 0, unavailable: 0, skipped: 0 };
+  megaState.plan = null;
+  megaState.currentEntity = null;
+  megaState.running = true;
+
+  $('mega-btn-start').disabled = true;
+  $('mega-btn-start').textContent = 'Running...';
+  $('mega-progress').style.display = 'flex';
+  $('mega-bar').style.width = '0%';
+  $('mega-progress-text').textContent = 'Starting...';
+  $('mega-progress-current').textContent = '';
+  $('mega-tbody').innerHTML = '';
+  megaUpdateCounts();
+
+  try {
+    const res = await fetch('/api/mega/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      alert(d.error || 'Failed to start mega run');
+      megaDone();
+    }
+  } catch (err) {
+    alert('Failed to start: ' + String(err));
+    megaDone();
+  }
+}
+
+function megaDone() {
+  megaState.running = false;
+  $('mega-btn-start').disabled = false;
+  $('mega-btn-start').textContent = 'Start Mega Run';
+}
+
+function megaUpdateCounts() {
+  const c = megaState.counts;
+  $('ms-ok').textContent = c.success ? `${c.success} ok` : '';
+  $('ms-err').textContent = c.error ? `${c.error} err` : '';
+  $('ms-na').textContent = c.unavailable ? `${c.unavailable} n/a` : '';
+  $('ms-skip').textContent = c.skipped ? `${c.skipped} skip` : '';
+}
+
+function megaStatusIcon(status) {
+  if (status === 'success') return '<span class="mega-st-success">&#10003;</span>';
+  if (status === 'error') return '<span class="mega-st-error">&#10007;</span>';
+  if (status === 'unavailable') return '<span class="mega-st-unavailable">&mdash;</span>';
+  if (status === 'skipped') return '<span class="mega-st-skipped">&#9675;</span>';
+  return '<span class="mega-st-running">&#9679;</span>';
+}
+
+function megaRenderTable() {
+  const tbody = $('mega-tbody');
+  const statusFilter = $('mega-filter-status').value;
+  const entityFilter = $('mega-filter-entity').value.toUpperCase().trim();
+  const contractorFilter = $('mega-filter-contractor').value.toUpperCase().trim();
+  const productFilter = $('mega-filter-product').value;
+
+  const filtered = megaState.results.filter(r => {
+    if (statusFilter && r.status !== statusFilter) return false;
+    if (entityFilter && !r.entityCountry.toUpperCase().includes(entityFilter)) return false;
+    if (contractorFilter && !r.contractorCountry.toUpperCase().includes(contractorFilter)) return false;
+    if (productFilter && r.product !== productFilter) return false;
+    return true;
+  });
+
+  // Limit to 500 rows for performance
+  const display = filtered.slice(0, 500);
+  let html = '';
+  for (const r of display) {
+    const time = r.duration ? (r.duration < 1000 ? r.duration + 'ms' : (r.duration/1000).toFixed(1) + 's') : '';
+    const eeCell = r.employmentId
+      ? `<a href="https://employ.partners.remote-sandbox.com/dashboard/people/${r.employmentId}/?selectedTab=profile" target="_blank" style="color:#58a6ff;text-decoration:none;font-size:11px;">${r.employmentId.slice(0,8)}...</a>`
+      : '';
+    const errCell = r.error ? `<span title="${r.error.replace(/"/g, '&quot;')}" style="max-width:200px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.error}</span>` : '';
+    const prodClass = r.product === 'CM' ? 'path-cm' : r.product === 'CM+' ? 'path-cmplus' : 'path-cor';
+    html += `<tr>
+      <td class="st">${megaStatusIcon(r.status)}</td>
+      <td style="color:#d29922;white-space:nowrap;">${r.entityCountry}</td>
+      <td style="color:#3fb950;white-space:nowrap;">${r.contractorCountry}</td>
+      <td><span class="${prodClass}">${r.product}</span></td>
+      <td style="color:#8b949e;">${r.step || ''}</td>
+      <td style="color:#d2a8ff;font-size:11px;">${(r.availableProducts || []).join(', ')}</td>
+      <td>${eeCell}</td>
+      <td style="color:#f85149;font-size:11px;">${errCell}</td>
+      <td class="rt-time">${time}</td>
+    </tr>`;
+  }
+  if (filtered.length > 500) {
+    html += `<tr><td colspan="9" style="color:#8b949e;text-align:center;padding:12px;">Showing 500 of ${filtered.length} results. Use filters to narrow down.</td></tr>`;
+  }
+  if (filtered.length === 0 && megaState.results.length > 0) {
+    html += `<tr><td colspan="9" style="color:#484f58;text-align:center;padding:12px;">No results match filters.</td></tr>`;
+  }
+  tbody.innerHTML = html;
+}
+
+function addMegaListeners(es) {
+  es.addEventListener('mega:start', () => {
+    megaState.results = [];
+    megaState.counts = { success: 0, error: 0, unavailable: 0, skipped: 0 };
+    megaState.running = true;
+    $('mega-btn-start').disabled = true;
+    $('mega-btn-start').textContent = 'Running...';
+    $('mega-progress').style.display = 'flex';
+    $('mega-bar').style.width = '0%';
+    $('mega-progress-text').textContent = 'Starting...';
+    $('mega-tbody').innerHTML = '';
+    megaUpdateCounts();
+  });
+
+  es.addEventListener('mega:plan', (e) => {
+    const data = JSON.parse(e.data);
+    megaState.plan = data;
+    $('mega-entity-count').textContent = `${data.entities.length} countries`;
+    $('mega-contractor-count').textContent = `${data.contractors.length} countries`;
+    $('mega-matrix-size').textContent = `${data.entities.length} x ${data.contractors.length} x ${data.products.length} = ${data.totalCombinations} cells`;
+    $('mega-progress-text').textContent = `0 / ${data.totalCombinations}`;
+  });
+
+  es.addEventListener('mega:country-products', (e) => {
+    const data = JSON.parse(e.data);
+    megaState.countryProducts = data.countryProducts || {};
+  });
+
+  es.addEventListener('mega:entity', (e) => {
+    const data = JSON.parse(e.data);
+    megaState.currentEntity = data.country;
+    const statusText = data.status === 'error' ? `Entity ${data.country}: ${data.error}` : `Entity: ${data.country} (${data.status})`;
+    $('mega-progress-current').textContent = statusText;
+  });
+
+  es.addEventListener('mega:result', (e) => {
+    const r = JSON.parse(e.data);
+    megaState.results.push(r);
+    megaState.counts[r.status] = (megaState.counts[r.status] || 0) + 1;
+    megaUpdateCounts();
+    // Update progress bar
+    if (megaState.plan) {
+      const pct = Math.round((megaState.results.length / megaState.plan.totalCombinations) * 100);
+      $('mega-bar').style.width = pct + '%';
+      $('mega-progress-text').textContent = `${megaState.results.length} / ${megaState.plan.totalCombinations}`;
+    }
+    megaRenderTable();
+  });
+
+  es.addEventListener('mega:done', (e) => {
+    const data = JSON.parse(e.data);
+    const s = data.summary;
+    $('mega-progress-text').textContent = `Done! ${s.total} cells in ${formatDuration(s.duration)}`;
+    $('mega-progress-current').textContent = '';
+    $('mega-bar').style.width = '100%';
+    megaDone();
+    loadLastMegaRun();
+  });
+
+  es.addEventListener('mega:error', (e) => {
+    const data = JSON.parse(e.data);
+    $('mega-progress-current').textContent = 'Error: ' + data.message;
+    megaDone();
+  });
+}
+
+function formatDuration(ms) {
+  if (!ms) return '';
+  if (ms < 1000) return ms + 'ms';
+  if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+  const m = Math.floor(ms / 60000);
+  const s = Math.round((ms % 60000) / 1000);
+  return m + 'm ' + s + 's';
+}
+
+function timeAgo(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+  return Math.floor(diff / 86400000) + 'd ago';
+}
+</script>
+</body>
+</html>

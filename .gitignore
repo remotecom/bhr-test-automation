@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+data/last-run.json
+data/mega-run.json
+.vercel/
+public/
+.next/
+tsconfig.tsbuildinfo

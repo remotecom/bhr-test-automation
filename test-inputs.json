@@ -1,0 +1,67 @@
+{
+  "_description": "Test inputs for BHR contractor onboarding. Edit contractor details, country assignments, or sanctioned country list, then run: npm start",
+
+  "contractors": {
+    "PRT": {
+      "country_code": "PRT",
+      "country_name": "Portugal",
+      "full_name": "Test Contractor PRT",
+      "job_title": "Software Engineer",
+      "email": "test.contractor.prt@example.com",
+      "notes": "Standard EU country. CM, CM+, COR all expected with eligible entity."
+    },
+    "GBR": {
+      "country_code": "GBR",
+      "country_name": "United Kingdom",
+      "full_name": "Test Contractor GBR",
+      "job_title": "Software Engineer",
+      "email": "test.contractor.gbr@example.com",
+      "ir35": { "default_status": "outside", "sds_required": true },
+      "notes": "UK contractor. IR35 applies. In 30-country list but same-country COR blocked."
+    },
+    "BHR": {
+      "country_code": "BHR",
+      "country_name": "Bahrain",
+      "full_name": "Test Contractor BHR",
+      "job_title": "Software Engineer",
+      "email": "test.contractor.bhr@example.com",
+      "notes": "No COR support. Only CM/CM+ available with eligible entity."
+    },
+    "USA": {
+      "country_code": "USA",
+      "country_name": "United States",
+      "full_name": "Test Contractor USA",
+      "job_title": "Software Engineer",
+      "email": "test.contractor.usa@example.com",
+      "notes": "Used for same-country COR test (B5). COR blocked when entity = contractor country."
+    },
+    "DEU": {
+      "country_code": "DEU",
+      "country_name": "Germany",
+      "full_name": "Test Contractor DEU",
+      "job_title": "Software Engineer",
+      "email": "test.contractor.deu@example.com",
+      "notes": "EU country for same-country COR test (B4). COR blocked when entity = contractor country."
+    },
+    "IND": {
+      "country_code": "IND",
+      "country_name": "India",
+      "full_name": "Test Contractor IND",
+      "job_title": "Software Engineer",
+      "email": "test.contractor.ind@example.com",
+      "notes": "Outside 30-country list. No CM/CM+ with India entity. EOR fallback path."
+    }
+  },
+
+  "sanctioned_countries": ["IRN", "CUB", "PRK", "SYR"],
+
+  "test_roles": {
+    "_description": "Maps each test scenario to a country code from the contractors section above.",
+    "happy_path": "PRT",
+    "no_cor_country": "BHR",
+    "ir35_country": "GBR",
+    "same_country_eu": "DEU",
+    "same_country_us": "USA",
+    "eor_fallback": "IND"
+  }
+}

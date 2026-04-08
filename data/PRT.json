@@ -1,0 +1,10 @@
+{
+  "country_code": "PRT",
+  "country_name": "Portugal",
+  "contractor": {
+    "full_name": "Test Contractor PRT",
+    "job_title": "Software Engineer",
+    "email": "test.contractor.prt@example.com"
+  },
+  "notes": "Standard EU country. CM, CM+, COR all expected with EU entity."
+}

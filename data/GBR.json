@@ -1,0 +1,14 @@
+{
+  "country_code": "GBR",
+  "country_name": "United Kingdom",
+  "contractor": {
+    "full_name": "Test Contractor GBR",
+    "job_title": "Software Engineer",
+    "email": "test.contractor.gbr@example.com"
+  },
+  "ir35": {
+    "default_status": "outside",
+    "sds_required": true
+  },
+  "notes": "UK contractor. IR35 applies. GBR is in 30-country list but same-country COR blocked (not EU/US)."
+}

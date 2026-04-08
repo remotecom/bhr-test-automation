@@ -1,0 +1,10 @@
+{
+  "country_code": "USA",
+  "country_name": "United States",
+  "contractor": {
+    "full_name": "Test Contractor USA",
+    "job_title": "Software Engineer",
+    "email": "test.contractor.usa@example.com"
+  },
+  "notes": "Used for Round 2 entity. Same-country COR allowed (US exception)."
+}

@@ -1,0 +1,10 @@
+{
+  "country_code": "IND",
+  "country_name": "India",
+  "contractor": {
+    "full_name": "Test Contractor IND",
+    "job_title": "Software Engineer",
+    "email": "test.contractor.ind@example.com"
+  },
+  "notes": "Round 4 entity. NOT in 30-country list. CM/CM+ blocked. Same-country COR also blocked (not EU/US)."
+}

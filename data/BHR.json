@@ -1,0 +1,10 @@
+{
+  "country_code": "BHR",
+  "country_name": "Bahrain",
+  "contractor": {
+    "full_name": "Test Contractor BHR",
+    "job_title": "Software Engineer",
+    "email": "test.contractor.bhr@example.com"
+  },
+  "notes": "No COR support (no CSA template for COR). Only CM/CM+ available with eligible entity."
+}
