@@ -14,6 +14,8 @@ export interface TestCase {
   hire?: string;
   path?: string;
   ir35?: string;
+  nationality?: string;
+  blockQuestionnaire?: boolean;
   expected?: TestExpected;
 }
 
@@ -114,6 +116,7 @@ export const TEST_MATRIX: TestCase[] = [
     hire: "BHR",
     path: "CM",
     ir35: "",
+    nationality: "national",
     expected: {
       eligibility: { standard: true, plus: true, cor: false },
       country: ["standard", "plus"],
@@ -128,6 +131,7 @@ export const TEST_MATRIX: TestCase[] = [
     hire: "BHR",
     path: "CM",
     ir35: "",
+    nationality: "non_national",
     expected: {
       eligibility: { standard: true, plus: true, cor: false },
       country: ["standard", "plus"],
@@ -296,6 +300,7 @@ export const TEST_MATRIX: TestCase[] = [
     hire: "PRT",
     path: "EOR",
     ir35: "",
+    blockQuestionnaire: true,
     expected: {
       eligibility: { standard: true, plus: true, cor: true },
       country: ["standard", "plus", "cor"],

@@ -1,20 +1,20 @@
 /**
- * POST /api/suite/run — Spawns vitest and streams test events as SSE.
+ * POST /api/suite/run — Runs test suite in-process and streams events as SSE.
  *
  * Architecture:
- *   1. Creates a temp HTTP server on a random port
- *   2. Spawns `npx vitest run` with DASHBOARD_PORT=<temp port>
- *   3. Reporter's emit() POSTs events to the temp server
- *   4. Temp server bridges events to the SSE stream
- *   5. Cleans up when vitest exits
+ *   1. Iterates the test matrix
+ *   2. Calls path functions directly (same as Playground)
+ *   3. Compares results against expected values
+ *   4. Streams SSE events to the frontend
+ *   5. Persists last-run data
  *
- * Local-only: returns 501 on Vercel (can't bind ports in serverless).
+ * Works on both local dev and Vercel.
  */
 
-import { spawn } from "node:child_process";
-import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import { put } from "@vercel/blob";
+import { runSuite } from "@/src/suite/runner";
 
 export const maxDuration = 300;
 
@@ -42,13 +42,6 @@ function extractTestId(name: string): string {
 }
 
 export async function POST(request: Request) {
-  if (process.env.VERCEL) {
-    return Response.json(
-      { error: "Test suite runs locally only. Use `npm test` on Vercel." },
-      { status: 501 }
-    );
-  }
-
   if (running) {
     return Response.json(
       { error: "Test suite is already running" },
@@ -160,7 +153,7 @@ export async function POST(request: Request) {
     }
   }
 
-  function saveLastRun() {
+  async function saveLastRun() {
     const tests: Record<string, TestState> = {};
     for (const [id, state] of testState) {
       tests[id] = state;
@@ -170,12 +163,23 @@ export async function POST(request: Request) {
       summary: suiteSummary,
       tests,
     };
+    const json = JSON.stringify(payload, null, 2);
+
+    // Try Vercel Blob first (works on Vercel), fall back to filesystem (local dev)
     try {
-      const lastRunPath = path.join(process.cwd(), "data", "last-run.json");
-      fs.mkdirSync(path.dirname(lastRunPath), { recursive: true });
-      fs.writeFileSync(lastRunPath, JSON.stringify(payload, null, 2));
+      await put("last-run.json", json, {
+        access: "public",
+        addRandomSuffix: false,
+        contentType: "application/json",
+      });
     } catch {
-      // Non-critical — persistence is best-effort
+      try {
+        const lastRunPath = path.join(process.cwd(), "data", "last-run.json");
+        fs.mkdirSync(path.dirname(lastRunPath), { recursive: true });
+        fs.writeFileSync(lastRunPath, json);
+      } catch {
+        // Non-critical — persistence is best-effort
+      }
     }
   }
 
@@ -192,77 +196,30 @@ export async function POST(request: Request) {
         }
       }
 
-      // Create temp HTTP server to receive events from the reporter
-      const tempServer = http.createServer((req, res) => {
-        if (req.method === "POST" && req.url === "/api/events") {
-          let body = "";
-          req.on("data", (chunk: string) => (body += chunk));
-          req.on("end", () => {
-            try {
-              const { event, data } = JSON.parse(body);
-              // Track for persistence
-              trackEvent(event, data || {});
-              // Bridge to SSE stream
-              send(event, data);
-              // Save on suite:end
-              if (event === "suite:end") {
-                saveLastRun();
-              }
-            } catch {
-              // Malformed JSON
-            }
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end('{"ok":true}');
-          });
-          return;
+      // Combined broadcast: SSE + state tracking
+      function broadcast(event: string, data: unknown) {
+        send(event, data);
+        trackEvent(event, (data || {}) as Record<string, unknown>);
+
+        if (event === "suite:end") {
+          saveLastRun();
         }
-        res.writeHead(404);
-        res.end();
-      });
+      }
 
-      // Listen on random port
-      tempServer.listen(0, () => {
-        const addr = tempServer.address();
-        const port = typeof addr === "object" && addr ? addr.port : 0;
-
-        // Spawn vitest
-        const args = ["vitest", "run"];
-        if (testFilter) {
-          // Escape regex special chars — vitest -t matches against full name (including describe)
-          const escaped = testFilter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          args.push("-t", escaped);
-        }
-        const child = spawn("npx", args, {
-          stdio: "inherit",
-          cwd: process.cwd(),
-          env: { ...process.env, DASHBOARD_PORT: String(port) },
-        });
-
-        let closed = false;
-        function cleanup() {
-          if (closed) return;
-          closed = true;
-          tempServer.close();
+      // Run the suite in-process
+      runSuite(broadcast, { testFilter })
+        .catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          send("suite:process-done", { exitCode: 1, error: msg });
+        })
+        .finally(() => {
           running = false;
-          try { controller.close(); } catch { /* already closed */ }
-        }
-
-        child.on("close", (code) => {
-          send("suite:process-done", { exitCode: code });
-          cleanup();
+          try {
+            controller.close();
+          } catch {
+            // Already closed
+          }
         });
-
-        child.on("error", (err) => {
-          send("suite:process-done", { exitCode: 1, error: err.message });
-          cleanup();
-        });
-      });
-
-      tempServer.on("error", () => {
-        send("suite:process-done", { exitCode: 1, error: "Failed to start event server" });
-        running = false;
-        try { controller.close(); } catch { /* already closed */ }
-      });
     },
   });
 

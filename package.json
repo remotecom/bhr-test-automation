@@ -30,9 +30,11 @@
     "postcss": "^8.5.9",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.8.3",
+    "vercel": "^50.42.0",
     "vitest": "^3.1.1"
   },
   "dependencies": {
+    "@vercel/blob": "^2.3.3",
     "dotenv": "^17.4.1",
     "jose": "^6.2.2",
     "jsonwebtoken": "^9.0.2",
