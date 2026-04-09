@@ -1,9 +1,16 @@
-import { createClientFromEnv } from "@/src/client";
+import { createClientFromEnv, createClientFromToken } from "@/src/client";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const client = createClientFromEnv();
-    const slug = process.env.COMPANY_SLUG;
+    // Read optional company override from headers
+    const overrideSlug = request.headers.get("X-Company-Slug") || undefined;
+    const overrideToken = request.headers.get("X-Refresh-Token") || undefined;
+
+    const client = overrideToken
+      ? createClientFromToken(overrideToken)
+      : createClientFromEnv();
+
+    const slug = overrideSlug || process.env.COMPANY_SLUG;
     if (!slug) {
       return Response.json({ error: "COMPANY_SLUG not set" }, { status: 500 });
     }
@@ -16,6 +23,7 @@ export async function GET() {
       slug: company.id,
       status: company.status,
       country: company.country_code,
+      source: overrideToken ? "custom" : "env",
     });
   } catch (err) {
     return Response.json(

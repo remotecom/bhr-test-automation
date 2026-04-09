@@ -11,7 +11,7 @@
  * employment → subscriptions → [subscription selection] → contract details → sign → invite
  */
 
-import { createClientFromEnv } from "../client";
+import { createClientFromEnv, createClientFromToken } from "../client";
 import { getCountries, type Country } from "../steps/countries";
 import { createEmployment, cancelEmployment } from "../steps/employment";
 import {
@@ -47,6 +47,8 @@ export interface PlaygroundConfig {
   ir35Status?: IR35Status;
   nationalityStatus?: NationalityStatus;
   targetProduct?: string; // 'CM' | 'CM+' | 'COR' | undefined
+  companySlug?: string;
+  refreshToken?: string;
 }
 
 export interface PlaygroundResult {
@@ -80,7 +82,7 @@ export async function runPlayground(
   }
   activeRun = {};
 
-  const companySlug = process.env.COMPANY_SLUG;
+  const companySlug = config.companySlug || process.env.COMPANY_SLUG;
   if (!companySlug) {
     throw new Error("COMPANY_SLUG env var required");
   }
@@ -93,7 +95,9 @@ export async function runPlayground(
       targetProduct: config.targetProduct || "none",
     });
 
-    const client = createClientFromEnv();
+    const client = config.refreshToken
+      ? createClientFromToken(config.refreshToken)
+      : createClientFromEnv();
     let entityId: string | undefined;
 
     // Step 1: Entity swap (optional)

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import { getCompanyHeaders } from "@/components/CompanySelector";
 
 export interface TraceEntry {
   type: "step" | "side" | "done" | "error";
@@ -168,9 +169,10 @@ export function usePlayground() {
       }));
 
       try {
+        const companyHeaders = getCompanyHeaders();
         const response = await fetch("/api/playground/run", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...companyHeaders },
           body: JSON.stringify(config),
           signal: abort.signal,
         });

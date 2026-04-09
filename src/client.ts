@@ -147,13 +147,12 @@ export class RemoteClient {
   }
 }
 
-/** Create a client from environment variables */
-export function createClientFromEnv(): RemoteClient {
+/** Read partner-level credentials from env (shared across all companies) */
+function getPartnerCredentials() {
   const clientId = process.env.CLIENT_ID;
   const clientSecret = process.env.CLIENT_SECRET;
   const gatewayEnv = process.env.GATEWAY_ENV || "sandbox";
   const gatewayUrl = process.env.GATEWAY_URL;
-  const refreshToken = process.env.REFRESH_TOKEN;
 
   if (!clientId || !clientSecret) {
     throw new Error(
@@ -161,11 +160,44 @@ export function createClientFromEnv(): RemoteClient {
     );
   }
 
+  return { clientId, clientSecret, gatewayEnv, gatewayUrl };
+}
+
+/** Create a client from environment variables */
+export function createClientFromEnv(): RemoteClient {
+  const { clientId, clientSecret, gatewayEnv, gatewayUrl } = getPartnerCredentials();
+  const refreshToken = process.env.REFRESH_TOKEN;
+
   return new RemoteClient({
     clientId,
     clientSecret,
     gatewayEnv,
     gatewayUrl,
     refreshToken,
+  });
+}
+
+/** Create a client with a specific refresh token (company override) */
+export function createClientFromToken(refreshToken: string): RemoteClient {
+  const { clientId, clientSecret, gatewayEnv, gatewayUrl } = getPartnerCredentials();
+
+  return new RemoteClient({
+    clientId,
+    clientSecret,
+    gatewayEnv,
+    gatewayUrl,
+    refreshToken,
+  });
+}
+
+/** Create a client using client_credentials grant only (partner-level, no company scope) */
+export function createPartnerClient(): RemoteClient {
+  const { clientId, clientSecret, gatewayEnv, gatewayUrl } = getPartnerCredentials();
+
+  return new RemoteClient({
+    clientId,
+    clientSecret,
+    gatewayEnv,
+    gatewayUrl,
   });
 }

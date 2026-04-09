@@ -8,7 +8,7 @@
  * The frontend (hooks/useSuite.ts) is unchanged — same event contract.
  */
 
-import { createClientFromEnv, type RemoteClient } from "../client";
+import { createClientFromEnv, createClientFromToken, type RemoteClient } from "../client";
 import { TEST_MATRIX, type TestCase } from "@/data/test-matrix";
 import { swapDefaultEntity } from "../setup/entity-swap";
 import { runCMPath } from "../paths/cm";
@@ -41,18 +41,22 @@ const SANCTIONED_CODES = ["IRN", "CUB", "PRK", "SYR"];
 export interface RunSuiteOptions {
   testFilter?: string;
   signal?: AbortSignal;
+  companySlug?: string;
+  refreshToken?: string;
 }
 
 export async function runSuite(
   broadcast: BroadcastFn,
   options?: RunSuiteOptions
 ): Promise<void> {
-  const companySlug = process.env.COMPANY_SLUG;
+  const companySlug = options?.companySlug || process.env.COMPANY_SLUG;
   if (!companySlug) {
     throw new Error("COMPANY_SLUG env var required");
   }
 
-  const client = createClientFromEnv();
+  const client = options?.refreshToken
+    ? createClientFromToken(options.refreshToken)
+    : createClientFromEnv();
 
   // Filter test matrix: remove section headers, apply optional filter
   let tests = TEST_MATRIX.filter(

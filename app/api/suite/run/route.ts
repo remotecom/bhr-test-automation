@@ -52,6 +52,10 @@ export async function POST(request: Request) {
   const abort = new AbortController();
   currentAbort = abort;
 
+  // Read optional company override from headers
+  const companySlug = request.headers.get("X-Company-Slug") || undefined;
+  const refreshToken = request.headers.get("X-Refresh-Token") || undefined;
+
   // Parse optional test filter from request body
   let testFilter: string | undefined;
   try {
@@ -208,7 +212,7 @@ export async function POST(request: Request) {
       }
 
       // Run the suite in-process
-      runSuite(broadcast, { testFilter, signal: abort.signal })
+      runSuite(broadcast, { testFilter, signal: abort.signal, companySlug, refreshToken })
         .catch((err) => {
           if (abort.signal.aborted) return; // Silently ignore aborted runs
           const msg = err instanceof Error ? err.message : String(err);

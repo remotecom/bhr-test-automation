@@ -8,3 +8,5 @@ data/mega-run.json
 public/
 .next/
 tsconfig.tsbuildinfo
+.vercel
+.env*.local

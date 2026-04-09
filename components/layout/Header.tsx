@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import CompanySelector from "../CompanySelector";
 
 type Tab = "suite" | "playground";
 
@@ -13,6 +14,7 @@ interface HeaderProps {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
   currentEntityName?: string | null;
+  onCompanyChange?: () => void;
 }
 
 const tabs: { mode: Tab; label: string }[] = [
@@ -20,7 +22,7 @@ const tabs: { mode: Tab; label: string }[] = [
   { mode: "playground", label: "Playground" },
 ];
 
-export default function Header({ status, activeTab, onTabChange, currentEntityName }: HeaderProps) {
+export default function Header({ status, activeTab, onTabChange, currentEntityName, onCompanyChange }: HeaderProps) {
   const router = useRouter();
 
   async function handleLogout() {
@@ -66,6 +68,7 @@ export default function Header({ status, activeTab, onTabChange, currentEntityNa
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <CompanySelector onCompanyChange={onCompanyChange} />
         {currentEntityName ? (
           <span style={{ fontSize: "11px", color: "#d29922" }}>
             Def. LE: {currentEntityName}

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Header from "@/components/layout/Header";
 import PlaygroundView from "@/components/playground/PlaygroundView";
 import SuiteView from "@/components/suite/SuiteView";
+import { getCompanyHeaders } from "@/components/CompanySelector";
 
 type Tab = "suite" | "playground";
 
@@ -24,9 +25,16 @@ export default function MainPage() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [contractors, setContractors] = useState<Record<string, { contractor?: { full_name?: string; email?: string; job_title?: string } }>>({});
   const [currentEntityName, setCurrentEntityName] = useState<string | null>(null);
+  const [companyVersion, setCompanyVersion] = useState(0);
+
+  const handleCompanyChange = useCallback(() => {
+    setCompanyVersion((v) => v + 1);
+  }, []);
 
   useEffect(() => {
-    fetch("/api/status")
+    const headers = getCompanyHeaders();
+
+    fetch("/api/status", { headers })
       .then((r) => r.json())
       .then((data) => {
         if (data.error) {
@@ -46,13 +54,13 @@ export default function MainPage() {
       .then((r) => r.json())
       .then((data) => setContractors(data || {}))
       .catch(() => {});
-  }, []);
+  }, [companyVersion]);
 
   const handleTabChange = useCallback((tab: Tab) => setActiveTab(tab), []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <Header status={status} activeTab={activeTab} onTabChange={handleTabChange} currentEntityName={currentEntityName} />
+      <Header status={status} activeTab={activeTab} onTabChange={handleTabChange} currentEntityName={currentEntityName} onCompanyChange={handleCompanyChange} />
 
       {activeTab === "suite" && <SuiteView />}
       {activeTab === "playground" && (

@@ -3,7 +3,12 @@ import { runPlayground } from "@/src/dashboard/playground";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const config = await request.json();
+  // Read optional company override from headers
+  const companySlug = request.headers.get("X-Company-Slug") || undefined;
+  const refreshToken = request.headers.get("X-Refresh-Token") || undefined;
+
+  const body = await request.json();
+  const config = { ...body, companySlug, refreshToken };
 
   const stream = new ReadableStream({
     async start(controller) {

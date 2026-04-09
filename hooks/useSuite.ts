@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { TEST_MATRIX, type TestCase, type TestExpected } from "@/data/test-matrix";
+import { getCompanyHeaders } from "@/components/CompanySelector";
 
 export interface TestState {
   status?: string;
@@ -222,9 +223,13 @@ export function useSuite() {
     }));
 
     try {
+      const companyHeaders = getCompanyHeaders();
       const response = await fetch("/api/suite/run", {
         method: "POST",
-        headers: testFilter ? { "Content-Type": "application/json" } : undefined,
+        headers: {
+          ...(testFilter ? { "Content-Type": "application/json" } : {}),
+          ...companyHeaders,
+        },
         body: testFilter ? JSON.stringify({ testFilter }) : undefined,
         signal: abort.signal,
       });
