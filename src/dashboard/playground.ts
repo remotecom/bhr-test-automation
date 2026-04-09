@@ -110,9 +110,9 @@ export async function runPlayground(
         companySlug,
         config.entityCountry
       );
-      entityId = entity.legal_entity_id;
+      entityId = entity.legal_entity_id || (entity as Record<string, unknown>).id as string;
       broadcast("playground:entity-swap", {
-        entityId: entity.legal_entity_id,
+        entityId,
         entityName: entity.name,
         countryCode: config.entityCountry,
       });

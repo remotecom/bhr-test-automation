@@ -91,29 +91,23 @@ export function usePlayground() {
           if ((data as Record<string, unknown>).error) {
             addTrace("side", "// Eligibility: failed (non-blocking)");
           } else {
-            const corCodes = (data.cor_supported_country_codes as string[]) || [];
-            setState((s) => {
-              const corForCountry = s.contractorCountry
-                ? corCodes.includes(s.contractorCountry)
-                : false;
-              const products = [
-                data.standard && "CM",
-                data.plus && "CM+",
-                corForCountry && "COR",
-              ].filter(Boolean);
-              const entityId = (data.entityId as string) || "";
-              addTrace(
-                "side",
-                `// Eligibility: [${products.join(", ")}] (entity ${entityId.slice(0, 8)}...)`
-              );
-              return {
-                ...s,
-                result: {
-                  ...s.result,
-                  eligibility: data as PlaygroundResult["eligibility"],
-                },
-              };
-            });
+            const entityId = (data.entityId as string) || "";
+            const products = [
+              data.standard && "CM",
+              data.plus && "CM+",
+              data.cor && "COR",
+            ].filter(Boolean);
+            addTrace(
+              "side",
+              `// Eligibility: [${products.join(", ")}] (entity ${entityId.slice(0, 8)}...)`
+            );
+            setState((s) => ({
+              ...s,
+              result: {
+                ...s.result,
+                eligibility: data as PlaygroundResult["eligibility"],
+              },
+            }));
           }
           break;
 
@@ -123,9 +117,14 @@ export function usePlayground() {
 
         case "playground:done": {
           const result = data as unknown as PlaygroundResult;
+          // Remove undefined keys so they don't overwrite data from earlier events
+          // (e.g. eligibility set by playground:eligibility before done arrives)
+          const defined = Object.fromEntries(
+            Object.entries(result).filter(([, v]) => v !== undefined)
+          );
           setState((s) => ({
             ...s,
-            result: { ...s.result, ...result },
+            result: { ...s.result, ...defined },
             lastEmploymentId: result.employmentId || s.lastEmploymentId,
           }));
           if (result.stoppedAt) {
