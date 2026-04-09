@@ -1,11 +1,11 @@
 # Contractor Onboarding Test Coverage
 
-21 automated test cases cover the full contractor onboarding flow via the Remote Partner API. This document explains:
+20 automated test cases cover the full contractor onboarding flow via the Remote Partner API. This document explains:
 
 1. **The Product Funnel** ... how products get filtered at each API stage
 2. **The Decision Tree** ... the business logic that produces 14 unique scenarios
 3. **The Enriched Matrix** ... each test case annotated with its tree path and purpose
-4. **Equivalence Classes** ... why 21 tests cover all possible country pairs
+4. **Equivalence Classes** ... why 20 tests cover all possible country pairs
 
 Source of truth for test specifications: [Notion](https://www.notion.so/remotecom/338cb4dadab481c0a440e38242c3867a)
 
@@ -95,7 +95,7 @@ Is entity in the 30-country list? (EU-27 + USA + GBR + CAN)
     |       |   |   Tests: D1 (outside), D5 (exempt), D6 (outside+SDS)
     |       |   |
     |       |   +-- inside --> CM only (IR35 kills CM+/COR)
-    |       |       Tests: D2, D3 (USA->GBR, inside)
+    |       |       Tests: D2 (USA->GBR, inside)
     |       |
     |       +-- Hire is BHR? --> Nationality applies
     |       |   |
@@ -135,7 +135,7 @@ Every leaf has at least one test. No leaf is uncovered. That's the completeness 
 | 4 | 30, same-country, GBR, IR35 inside | D4 | [CM] |
 | 5 | 30, same-country, not GBR | B4, B5 | [CM, CM+] |
 | 6 | 30, cross-entity, GBR, IR35 outside/exempt | D1, D5, D6 | [CM, CM+, COR] |
-| 7 | 30, cross-entity, GBR, IR35 inside | D2, D3 | [CM] |
+| 7 | 30, cross-entity, GBR, IR35 inside | D2 | [CM] |
 | 8 | 30, cross-entity, BHR, national | B2, N1 | [CM, CM+] |
 | 9 | 30, cross-entity, BHR, non_national | N2 | [CM] |
 | 10 | 30, cross-entity, other | A1(CM), A1(CM+), A1(COR), G1, G2 | [CM, CM+, COR] |
@@ -260,16 +260,13 @@ Tests grouped by decision tree path. Multiple tests at the same leaf have identi
 
 | Test | Entity | Hire | IR35 | Subs | What's unique | Without this test... |
 |---|---|---|---|---|---|---|
-| D2 | USA | GBR | inside | CM | "only standard remains" (Notion) | No proof IR35 inside blocks CM+/COR cross-entity |
-| D3 | USA | GBR | inside | CM | "only CM remains" (Notion) | Same as D2, different Notion row |
+| D2 | USA | GBR | inside | CM | IR35 inside blocks CM+/COR cross-entity | No proof IR35 inside works across entity boundaries |
 
-**Expected values (both tests):**
+**Expected values:**
 - Eligibility: standard ✓, plus ✓, cor ✓
 - Country products: [standard, plus, cor]
 - Subs: [CM]
 - Questionnaire: null
-
-**Duplicate note:** D2 and D3 are functionally identical. They map to different Notion spec rows that describe the same outcome in different words ("only standard remains" vs "only CM remains"). Consider consolidating in a future spec revision.
 
 ---
 
@@ -383,7 +380,6 @@ Tests grouped by decision tree path. Multiple tests at the same leaf have identi
 
 | Pair | Relationship | Why both exist |
 |---|---|---|
-| D2 / D3 | Identical config and expected | Different Notion rows: "only standard remains" vs "only CM remains" (same outcome) |
 | B2 / N1 | Identical config and expected | B2 tests COR absence, N1 tests nationality gating. Same rule, different section organization |
 | D1 / D6 | Same config except D6 mentions SDS upload | SDS is a UI-only distinction not captured by automation |
 | A1(COR) / G1 | Both GBR->PRT COR with questionnaire pass | A1(COR) tests full COR flow, G1 focuses on questionnaire behavior |
@@ -400,7 +396,7 @@ Tests grouped by decision tree path. Multiple tests at the same leaf have identi
 
 ## 4. Equivalence Classes and the Playground
 
-The 21 tests cover 14 unique scenarios. Every other possible country pair is equivalent to one of these tested scenarios. The table below shows which leaf any untested combination maps to.
+The 20 tests cover 14 unique scenarios. Every other possible country pair is equivalent to one of these tested scenarios. The table below shows which leaf any untested combination maps to.
 
 | If you're testing... | Same outcome as | Why | Tree Leaf |
 |---|---|---|---|

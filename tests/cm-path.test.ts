@@ -1,11 +1,11 @@
 /**
  * CM ("standard") product path tests.
  *
- * Test IDs: A1(CM), B2, B6, N1, N2, D4, D2, D3
+ * Test IDs: A1(CM), B2, B6, N1, N2, D4, D2
  *
  * Entity rounds:
  *   Round 1 (UK entity): A1(CM), B2, B6, N1, N2, D4
- *   Round 2 (USA entity): D2, D3
+ *   Round 2 (USA entity): D2
  */
 
 import { describe, test, expect, beforeAll } from "vitest";
@@ -143,17 +143,4 @@ describe("CM Path — Round 2 (USA Entity)", () => {
     assertProductsAbsent(result.availableProducts, ["CM+", "COR"], "D2");
   });
 
-  test("D3: UK contractor — IR35 inside — only CM remains (same as D2)", async () => {
-    const result = await runCMPath({
-      client,
-      companyId: companySlug,
-      countryCode: GBR.country_code,
-      contractor: { ...GBR.contractor, email: "d3.test@example.com" },
-      legalEntityId: entity.legal_entity_id,
-      ir35Status: "inside",
-    });
-
-    assertProductsPresent(result.availableProducts, ["CM"], "D3");
-    assertProductsAbsent(result.availableProducts, ["CM+", "COR"], "D3");
-  });
 });

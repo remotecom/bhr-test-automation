@@ -94,20 +94,6 @@ export const TEST_MATRIX: TestCase[] = [
       questionnaire: null,
     },
   },
-  {
-    id: "D3",
-    desc: "UK contractor — IR35 inside — only CM remains",
-    entity: "USA",
-    hire: "GBR",
-    path: "CM",
-    ir35: "inside",
-    expected: {
-      eligibility: { standard: true, plus: true, cor: true },
-      country: ["standard", "plus", "cor"],
-      subs: ["CM"],
-      questionnaire: null,
-    },
-  },
 
   { section: "Nationality Path — Round 1 (UK Entity)" },
   {

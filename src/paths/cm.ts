@@ -2,7 +2,7 @@
  * CM (Contractor Management / "standard") product path.
  *
  * Flow: eligibility → countries → employment → IR35 → subscriptions → verify → cleanup
- * Tests: A1(CM), B2, B6, D2, D3, D4
+ * Tests: A1(CM), B2, B6, D2, D4
  */
 
 import type { RemoteClient } from "../client";

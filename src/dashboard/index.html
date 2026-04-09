@@ -478,8 +478,6 @@ const TEST_MATRIX = [
   { section: 'CM Path — Round 2 (USA Entity)' },
   { id:'D2',      desc:'UK contractor — IR35 inside — only standard remains',        entity:'USA', hire:'GBR', path:'CM',       ir35:'inside',
     expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM'], questionnaire:null }},
-  { id:'D3',      desc:'UK contractor — IR35 inside — only CM remains',              entity:'USA', hire:'GBR', path:'CM',       ir35:'inside',
-    expected:{ eligibility:{standard:true,plus:true,cor:true}, country:['standard','plus','cor'], subs:['CM'], questionnaire:null }},
 
   { section: 'CM+ Path — Round 1 (UK Entity)' },
   { id:'A1(CM+)', desc:'Happy path — plus product available for PRT contractor',     entity:'GBR', hire:'PRT', path:'CM+',      ir35:'',
