@@ -40,6 +40,7 @@ const SANCTIONED_CODES = ["IRN", "CUB", "PRK", "SYR"];
 
 export interface RunSuiteOptions {
   testFilter?: string;
+  signal?: AbortSignal;
 }
 
 export async function runSuite(
@@ -84,6 +85,8 @@ export async function runSuite(
   let entityId: string | undefined;
 
   for (const tc of tests) {
+    if (options?.signal?.aborted) break;
+
     const testStart = Date.now();
     let employmentId: string | undefined;
 
@@ -106,7 +109,7 @@ export async function runSuite(
       const entityCode = tc.entity || "GBR";
       if (entityCode !== currentEntity) {
         const entity = await swapDefaultEntity(client, companySlug, entityCode);
-        entityId = entity.legal_entity_id;
+        entityId = entity.legal_entity_id || (entity as Record<string, unknown>).id as string;
         currentEntity = entityCode;
         broadcast("entity:swap", { countryCode: entityCode, entityId });
         // Small delay after swap to let sandbox settle
@@ -152,7 +155,8 @@ export async function runSuite(
             countryProducts: result.countryProducts,
             questionnaireResult: result.questionnaireResult,
           },
-          tc.expected
+          tc.expected,
+          hireCountry
         );
 
         if (comparison.passed) {

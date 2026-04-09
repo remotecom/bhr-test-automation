@@ -42,6 +42,7 @@ export const TEST_MATRIX: TestCase[] = [
     hire: "BHR",
     path: "CM",
     ir35: "",
+    nationality: "national",
     expected: {
       eligibility: { standard: true, plus: true, cor: false },
       country: ["standard", "plus"],
@@ -55,7 +56,7 @@ export const TEST_MATRIX: TestCase[] = [
     entity: "GBR",
     hire: "GBR",
     path: "CM",
-    ir35: "",
+    ir35: "outside",
     expected: {
       eligibility: { standard: true, plus: true, cor: false },
       country: ["standard", "plus", "cor"],

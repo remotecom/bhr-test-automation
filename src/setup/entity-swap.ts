@@ -49,9 +49,14 @@ export function findEntityByCountry(
   entities: LegalEntity[],
   countryCode: string
 ): LegalEntity | undefined {
-  return entities.find(
-    (e) => e.country?.code?.toLowerCase() === countryCode.toLowerCase()
-  );
+  const target = countryCode.toLowerCase();
+  return entities.find((e) => {
+    // API returns flat country_code, not nested country.code
+    const code = (e as Record<string, unknown>).country_code as string
+      || e.country?.code
+      || "";
+    return code.toLowerCase() === target;
+  });
 }
 
 /** Create a new legal entity for a company in the given country */
@@ -119,12 +124,17 @@ export async function reassignDefaultEntity(
  * Full entity swap: reuse existing entity or create new → bypass KYB → make it default.
  * Checks if the company already has an entity in the target country before creating.
  */
+/** Resolve entity ID — list API returns `id`, create API returns `legal_entity_id` */
+function resolveEntityId(e: LegalEntity): string {
+  return e.legal_entity_id || (e as Record<string, unknown>).id as string || "";
+}
+
 export async function swapDefaultEntity(
   client: RemoteClient,
   companySlug: string,
   countryCode: string
 ): Promise<LegalEntity> {
-  // Check for existing entity in this country
+  // Check first page for existing entity in this country
   const existing = await getCompanyEntities(client, companySlug);
   const match = findEntityByCountry(existing, countryCode);
 
@@ -132,12 +142,14 @@ export async function swapDefaultEntity(
   if (match) {
     entity = match;
   } else {
+    // Not found on page 1 — just create a new one
     entity = await createLegalEntity(client, companySlug, countryCode);
-    trace.entityCreated(countryCode, entity.legal_entity_id, entity.name);
+    trace.entityCreated(countryCode, resolveEntityId(entity), entity.name);
     await bypassEligibilityChecks(client, companySlug);
   }
 
-  await reassignDefaultEntity(client, companySlug, entity.legal_entity_id);
-  trace.entitySwap(countryCode, entity.legal_entity_id);
+  const eid = resolveEntityId(entity);
+  await reassignDefaultEntity(client, companySlug, eid);
+  trace.entitySwap(countryCode, eid);
   return entity;
 }

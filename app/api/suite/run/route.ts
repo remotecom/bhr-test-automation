@@ -19,6 +19,7 @@ import { runSuite } from "@/src/suite/runner";
 export const maxDuration = 300;
 
 let running = false;
+let currentAbort: AbortController | null = null;
 
 // Server-side state tracking (mirrors run.ts trackEvent pattern)
 interface TestState {
@@ -42,14 +43,14 @@ function extractTestId(name: string): string {
 }
 
 export async function POST(request: Request) {
-  if (running) {
-    return Response.json(
-      { error: "Test suite is already running" },
-      { status: 409 }
-    );
+  // Abort previous run if still in progress
+  if (running && currentAbort) {
+    currentAbort.abort();
   }
 
   running = true;
+  const abort = new AbortController();
+  currentAbort = abort;
 
   // Parse optional test filter from request body
   let testFilter: string | undefined;
@@ -207,13 +208,15 @@ export async function POST(request: Request) {
       }
 
       // Run the suite in-process
-      runSuite(broadcast, { testFilter })
+      runSuite(broadcast, { testFilter, signal: abort.signal })
         .catch((err) => {
+          if (abort.signal.aborted) return; // Silently ignore aborted runs
           const msg = err instanceof Error ? err.message : String(err);
           send("suite:process-done", { exitCode: 1, error: msg });
         })
         .finally(() => {
           running = false;
+          currentAbort = null;
           try {
             controller.close();
           } catch {

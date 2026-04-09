@@ -21,12 +21,13 @@ function sortedEqual(a: string[], b: string[]): boolean {
 
 export function compareTestResult(
   actual: {
-    eligibility?: { standard: boolean; plus: boolean; cor: boolean };
+    eligibility?: { standard: boolean; plus: boolean; cor: boolean; cor_supported_country_codes?: string[] };
     availableProducts?: string[];
     countryProducts?: string[];
     questionnaireResult?: { is_blocking?: boolean } | null;
   },
-  expected: TestExpected
+  expected: TestExpected,
+  hireCountry: string
 ): CompareResult {
   const errors: string[] = [];
 
@@ -40,8 +41,11 @@ export function compareTestResult(
     if (a.plus !== e.plus) {
       errors.push(`eligibility.plus: expected ${e.plus}, got ${a.plus}`);
     }
-    if (a.cor !== e.cor) {
-      errors.push(`eligibility.cor: expected ${e.cor}, got ${a.cor}`);
+    // COR: derive from cor_supported_country_codes, not the raw cor boolean
+    const corCodes = (a.cor_supported_country_codes || []).map(c => c.toUpperCase());
+    const actualCor = corCodes.includes(hireCountry.toUpperCase());
+    if (actualCor !== e.cor) {
+      errors.push(`eligibility.cor: expected ${e.cor}, got ${actualCor} (cor_supported_country_codes: [${corCodes.join(", ")}])`);
     }
   } else if (expected.eligibility && !actual.eligibility) {
     errors.push("eligibility: expected result but got none");
