@@ -8,7 +8,7 @@
  * The frontend (hooks/useSuite.ts) is unchanged — same event contract.
  */
 
-import { createClientFromEnv, createClientFromToken, type RemoteClient } from "../client";
+import { createClientFromEnv, createClientFromToken, getCompanySlug, type RemoteClient } from "../client";
 import { TEST_MATRIX, type TestCase } from "@/data/test-matrix";
 import { swapDefaultEntity } from "../setup/entity-swap";
 import { runCMPath } from "../paths/cm";
@@ -43,20 +43,21 @@ export interface RunSuiteOptions {
   signal?: AbortSignal;
   companySlug?: string;
   refreshToken?: string;
+  gatewayEnv?: string;
 }
 
 export async function runSuite(
   broadcast: BroadcastFn,
   options?: RunSuiteOptions
 ): Promise<void> {
-  const companySlug = options?.companySlug || process.env.COMPANY_SLUG;
+  const companySlug = options?.companySlug || getCompanySlug(options?.gatewayEnv);
   if (!companySlug) {
     throw new Error("COMPANY_SLUG env var required");
   }
 
   const client = options?.refreshToken
-    ? createClientFromToken(options.refreshToken)
-    : createClientFromEnv();
+    ? createClientFromToken(options.refreshToken, options?.gatewayEnv)
+    : createClientFromEnv(options?.gatewayEnv);
 
   // Filter test matrix: remove section headers, apply optional filter
   let tests = TEST_MATRIX.filter(

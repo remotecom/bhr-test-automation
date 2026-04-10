@@ -3,8 +3,7 @@
 import React, { useState } from "react";
 import { useLifecycle, type LifecycleTestState, type TransitionState } from "@/hooks/useLifecycle";
 import type { LifecycleTestCase } from "@/data/lifecycle-matrix";
-
-const SANDBOX_BASE = "https://employ.partners.remote-sandbox.com/dashboard";
+import { getDashboardBase } from "@/components/EnvironmentSelector";
 
 function StatusIcon({ status }: { status?: string }) {
   if (status === "pass") return <span className="st-pass">✓</span>;
@@ -170,7 +169,7 @@ function ExpandedDetail({ ts, available }: { ts: LifecycleTestState; available: 
             <div style={{ fontSize: "11px" }}>
               <span style={{ color: "#8b949e" }}>EE: </span>
               <a
-                href={`${SANDBOX_BASE}/people/${ts.eeId}/?selectedTab=profile`}
+                href={`${getDashboardBase()}/people/${ts.eeId}/?selectedTab=profile`}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ color: "#58a6ff" }}
@@ -184,7 +183,7 @@ function ExpandedDetail({ ts, available }: { ts: LifecycleTestState; available: 
             <div style={{ fontSize: "11px" }}>
               <span style={{ color: "#8b949e" }}>LE: </span>
               <a
-                href={`${SANDBOX_BASE}/legal-entities/${ts.entityId}/?selectedTab=details`}
+                href={`${getDashboardBase()}/legal-entities/${ts.entityId}/?selectedTab=details`}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ color: "#d29922" }}

@@ -2,8 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { TraceEntry } from "@/hooks/usePlayground";
-
-const SANDBOX_BASE = "https://employ.partners.remote-sandbox.com/dashboard";
+import { getDashboardBase } from "@/components/EnvironmentSelector";
 
 /** Linkify entity/employment IDs in trace text */
 function LinkifiedLabel({ text }: { text: string }) {
@@ -18,7 +17,7 @@ function LinkifiedLabel({ text }: { text: string }) {
           return (
             <a
               key={i}
-              href={`${SANDBOX_BASE}/legal-entities/?search=${entityMatch[1]}`}
+              href={`${getDashboardBase()}/legal-entities/?search=${entityMatch[1]}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: "#d29922", textDecoration: "none" }}

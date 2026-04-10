@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { getEnvironmentHeaders } from "./EnvironmentSelector";
 
 const LS_SLUG = "bhr_company_slug";
 const LS_TOKEN = "bhr_refresh_token";
@@ -72,7 +73,7 @@ export default function CompanySelector({ onCompanyChange }: CompanySelectorProp
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/company/create", { method: "POST" });
+      const res = await fetch("/api/company/create", { method: "POST", headers: getEnvironmentHeaders() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
       saveOverride(data.company_slug, data.refresh_token, data.name);
@@ -92,7 +93,7 @@ export default function CompanySelector({ onCompanyChange }: CompanySelectorProp
     try {
       const res = await fetch("/api/company/resolve", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getEnvironmentHeaders() },
         body: JSON.stringify({ refresh_token: tokenInput.trim() }),
       });
       const data = await res.json();

@@ -1,8 +1,9 @@
-import { createPartnerClient } from "@/src/client";
+import { createPartnerClient, readRequestOverrides } from "@/src/client";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
-    const client = createPartnerClient();
+    const { gatewayEnv } = readRequestOverrides(request);
+    const client = createPartnerClient(gatewayEnv);
     const ts = Date.now();
 
     // Create sandbox company with get_oauth_access_tokens action to receive refresh token

@@ -6,6 +6,7 @@
  */
 
 import { runLifecycleSuite } from "@/src/suite/lifecycle-runner";
+import { readRequestOverrides } from "@/src/client";
 
 export const maxDuration = 300;
 
@@ -21,8 +22,7 @@ export async function POST(request: Request) {
   const abort = new AbortController();
   currentAbort = abort;
 
-  const companySlug = request.headers.get("X-Company-Slug") || undefined;
-  const refreshToken = request.headers.get("X-Refresh-Token") || undefined;
+  const { companySlug, refreshToken, gatewayEnv } = readRequestOverrides(request);
 
   let testFilter: string | undefined;
   try {
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
         }
       }
 
-      runLifecycleSuite(broadcast, { testFilter, signal: abort.signal, companySlug, refreshToken })
+      runLifecycleSuite(broadcast, { testFilter, signal: abort.signal, companySlug, refreshToken, gatewayEnv })
         .catch((err) => {
           if (abort.signal.aborted) return;
           const msg = err instanceof Error ? err.message : String(err);

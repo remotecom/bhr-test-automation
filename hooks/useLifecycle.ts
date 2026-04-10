@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { LIFECYCLE_MATRIX, type LifecycleTestCase } from "@/data/lifecycle-matrix";
 import { getCompanyHeaders } from "@/components/CompanySelector";
+import { getEnvironmentHeaders } from "@/components/EnvironmentSelector";
 
 export interface TransitionState {
   step: string;
@@ -217,12 +218,12 @@ export function useLifecycle() {
     }));
 
     try {
-      const companyHeaders = getCompanyHeaders();
+      const customHeaders = { ...getCompanyHeaders(), ...getEnvironmentHeaders() };
       const response = await fetch("/api/lifecycle/run", {
         method: "POST",
         headers: {
           ...(testFilter ? { "Content-Type": "application/json" } : {}),
-          ...companyHeaders,
+          ...customHeaders,
         },
         body: testFilter ? JSON.stringify({ testFilter }) : undefined,
         signal: abort.signal,

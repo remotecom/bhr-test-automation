@@ -1,4 +1,4 @@
-import { createClientFromToken } from "@/src/client";
+import { createClientFromToken, readRequestOverrides } from "@/src/client";
 
 /** Decode JWT payload without verification (we just got it from the gateway) */
 function decodeJwtPayload(token: string): Record<string, unknown> {
@@ -11,6 +11,7 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
 
 export async function POST(request: Request) {
   try {
+    const { gatewayEnv } = readRequestOverrides(request);
     const body = await request.json();
     const refreshToken = body?.refresh_token;
 
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
     }
 
     // Exchange refresh token for access token
-    const client = createClientFromToken(refreshToken);
+    const client = createClientFromToken(refreshToken, gatewayEnv);
     const accessToken = await client.getToken();
 
     // Extract company ID from JWT payload

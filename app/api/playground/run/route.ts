@@ -1,14 +1,13 @@
 import { runPlayground } from "@/src/dashboard/playground";
+import { readRequestOverrides } from "@/src/client";
 
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  // Read optional company override from headers
-  const companySlug = request.headers.get("X-Company-Slug") || undefined;
-  const refreshToken = request.headers.get("X-Refresh-Token") || undefined;
+  const { companySlug, refreshToken, gatewayEnv } = readRequestOverrides(request);
 
   const body = await request.json();
-  const config = { ...body, companySlug, refreshToken };
+  const config = { ...body, companySlug, refreshToken, gatewayEnv };
 
   const stream = new ReadableStream({
     async start(controller) {

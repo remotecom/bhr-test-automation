@@ -1,16 +1,14 @@
-import { createClientFromEnv, createClientFromToken } from "@/src/client";
+import { createClientFromEnv, createClientFromToken, readRequestOverrides, getCompanySlug } from "@/src/client";
 
 export async function GET(request: Request) {
   try {
-    // Read optional company override from headers
-    const overrideSlug = request.headers.get("X-Company-Slug") || undefined;
-    const overrideToken = request.headers.get("X-Refresh-Token") || undefined;
+    const { companySlug: overrideSlug, refreshToken: overrideToken, gatewayEnv } = readRequestOverrides(request);
 
     const client = overrideToken
-      ? createClientFromToken(overrideToken)
-      : createClientFromEnv();
+      ? createClientFromToken(overrideToken, gatewayEnv)
+      : createClientFromEnv(gatewayEnv);
 
-    const slug = overrideSlug || process.env.COMPANY_SLUG;
+    const slug = overrideSlug || getCompanySlug(gatewayEnv);
     if (!slug) {
       return Response.json({ error: "COMPANY_SLUG not set" }, { status: 500 });
     }

@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Header from "@/components/layout/Header";
+import { LIFECYCLE_ENABLED } from "@/components/layout/Header";
 import PlaygroundView from "@/components/playground/PlaygroundView";
 import SuiteView from "@/components/suite/SuiteView";
 import LifecycleView from "@/components/lifecycle/LifecycleView";
 import { getCompanyHeaders } from "@/components/CompanySelector";
+import { getEnvironmentHeaders } from "@/components/EnvironmentSelector";
 
 type Tab = "suite" | "playground" | "lifecycle";
 
@@ -33,7 +35,7 @@ export default function MainPage() {
   }, []);
 
   useEffect(() => {
-    const headers = getCompanyHeaders();
+    const headers = { ...getCompanyHeaders(), ...getEnvironmentHeaders() };
 
     fetch("/api/status", { headers })
       .then((r) => r.json())
@@ -46,12 +48,12 @@ export default function MainPage() {
       })
       .catch(() => setStatus({ connected: false, error: "Connection failed" }));
 
-    fetch("/api/countries")
+    fetch("/api/countries", { headers })
       .then((r) => r.json())
       .then((data) => setCountries(data.data || []))
       .catch(() => {});
 
-    fetch("/api/contractors")
+    fetch("/api/contractors", { headers })
       .then((r) => r.json())
       .then((data) => setContractors(data || {}))
       .catch(() => {});
@@ -61,13 +63,13 @@ export default function MainPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <Header status={status} activeTab={activeTab} onTabChange={handleTabChange} currentEntityName={currentEntityName} onCompanyChange={handleCompanyChange} />
+      <Header status={status} activeTab={activeTab} onTabChange={handleTabChange} currentEntityName={currentEntityName} onCompanyChange={handleCompanyChange} onEnvironmentChange={handleCompanyChange} />
 
       {activeTab === "suite" && <SuiteView />}
       {activeTab === "playground" && (
         <PlaygroundView countries={countries} contractors={contractors} onEntityChange={setCurrentEntityName} />
       )}
-      {activeTab === "lifecycle" && <LifecycleView />}
+      {LIFECYCLE_ENABLED && activeTab === "lifecycle" && <LifecycleView />}
     </div>
   );
 }

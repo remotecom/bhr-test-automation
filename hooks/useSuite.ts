@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { TEST_MATRIX, type TestCase, type TestExpected } from "@/data/test-matrix";
 import { getCompanyHeaders } from "@/components/CompanySelector";
+import { getEnvironmentHeaders } from "@/components/EnvironmentSelector";
 
 export interface TestState {
   status?: string;
@@ -223,12 +224,12 @@ export function useSuite() {
     }));
 
     try {
-      const companyHeaders = getCompanyHeaders();
+      const customHeaders = { ...getCompanyHeaders(), ...getEnvironmentHeaders() };
       const response = await fetch("/api/suite/run", {
         method: "POST",
         headers: {
           ...(testFilter ? { "Content-Type": "application/json" } : {}),
-          ...companyHeaders,
+          ...customHeaders,
         },
         body: testFilter ? JSON.stringify({ testFilter }) : undefined,
         signal: abort.signal,

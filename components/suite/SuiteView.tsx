@@ -3,8 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useSuite, arrMatch, type TestState } from "@/hooks/useSuite";
 import type { TestCase, TestExpected } from "@/data/test-matrix";
-
-const SANDBOX_BASE = "https://employ.partners.remote-sandbox.com/dashboard";
+import { getDashboardBase } from "@/components/EnvironmentSelector";
 
 function pathClass(p: string): string {
   if (p === "CM") return "path-cm";
@@ -47,7 +46,7 @@ function EeCell({ ts }: { ts: TestState }) {
         <div className="ee-row">
           <span className="ee-label">EE:</span>
           <a
-            href={`${SANDBOX_BASE}/people/${ts.eeId}/?selectedTab=profile`}
+            href={`${getDashboardBase()}/people/${ts.eeId}/?selectedTab=profile`}
             target="_blank"
             rel="noopener noreferrer"
             title={ts.eeEmail || ts.eeId}
@@ -61,7 +60,7 @@ function EeCell({ ts }: { ts: TestState }) {
         <div className="ee-row">
           <span className="ee-label">LE:</span>
           <a
-            href={`${SANDBOX_BASE}/legal-entities/${ts.entityId}/?selectedTab=details`}
+            href={`${getDashboardBase()}/legal-entities/${ts.entityId}/?selectedTab=details`}
             target="_blank"
             rel="noopener noreferrer"
             className="entity-link"

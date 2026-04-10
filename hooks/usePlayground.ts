@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { getCompanyHeaders } from "@/components/CompanySelector";
+import { getEnvironmentHeaders } from "@/components/EnvironmentSelector";
 
 export interface TraceEntry {
   type: "step" | "side" | "done" | "error";
@@ -168,10 +169,10 @@ export function usePlayground() {
       }));
 
       try {
-        const companyHeaders = getCompanyHeaders();
+        const customHeaders = { ...getCompanyHeaders(), ...getEnvironmentHeaders() };
         const response = await fetch("/api/playground/run", {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...companyHeaders },
+          headers: { "Content-Type": "application/json", ...customHeaders },
           body: JSON.stringify(config),
           signal: abort.signal,
         });
@@ -225,7 +226,7 @@ export function usePlayground() {
     try {
       await fetch("/api/playground/cancel", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getEnvironmentHeaders() },
         body: JSON.stringify({ employmentId: state.lastEmploymentId }),
       });
       addTrace("done", `Cancelled employment ${state.lastEmploymentId.slice(0, 8)}...`);

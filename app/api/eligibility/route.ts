@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClientFromEnv } from "@/src/client";
+import { createClientFromEnv, readRequestOverrides } from "@/src/client";
 import { getContractorEligibility } from "@/src/steps/eligibility";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const companyId = searchParams.get("companyId");
   const legalEntityId = searchParams.get("legalEntityId");
+  const { gatewayEnv } = readRequestOverrides(request);
 
   if (!companyId || !legalEntityId) {
     return NextResponse.json(
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const client = createClientFromEnv();
+    const client = createClientFromEnv(gatewayEnv);
     const result = await getContractorEligibility(client, companyId, legalEntityId);
     return NextResponse.json(result);
   } catch (err) {

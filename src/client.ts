@@ -147,12 +147,39 @@ export class RemoteClient {
   }
 }
 
-/** Read partner-level credentials from env (shared across all companies) */
-function getPartnerCredentials() {
-  const clientId = process.env.CLIENT_ID;
-  const clientSecret = process.env.CLIENT_SECRET;
-  const gatewayEnv = process.env.GATEWAY_ENV || "sandbox";
-  const gatewayUrl = process.env.GATEWAY_URL;
+/** Get the company slug for the given environment */
+export function getCompanySlug(gatewayEnv?: string): string | undefined {
+  if (gatewayEnv === "sandbox") {
+    return process.env.SANDBOX_COMPANY_SLUG || process.env.COMPANY_SLUG;
+  }
+  return process.env.COMPANY_SLUG;
+}
+
+/** Extract override headers from an incoming request */
+export function readRequestOverrides(request: Request) {
+  return {
+    companySlug: request.headers.get("X-Company-Slug") || undefined,
+    refreshToken: request.headers.get("X-Refresh-Token") || undefined,
+    gatewayEnv: request.headers.get("X-Gateway-Env") || undefined,
+  };
+}
+
+/**
+ * Read credentials from env, selecting the right set based on gateway env.
+ *
+ * Unprefixed vars (CLIENT_ID, CLIENT_SECRET) are the default (partners).
+ * SANDBOX_ prefixed vars override when gatewayEnv === "sandbox".
+ * This keeps Vitest tests and legacy server working unchanged.
+ */
+function getPartnerCredentials(gatewayEnvOverride?: string) {
+  const gatewayEnv = gatewayEnvOverride || process.env.GATEWAY_ENV || "partners";
+
+  const clientId = gatewayEnv === "sandbox"
+    ? (process.env.SANDBOX_CLIENT_ID || process.env.CLIENT_ID)
+    : process.env.CLIENT_ID;
+  const clientSecret = gatewayEnv === "sandbox"
+    ? (process.env.SANDBOX_CLIENT_SECRET || process.env.CLIENT_SECRET)
+    : process.env.CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
     throw new Error(
@@ -160,44 +187,43 @@ function getPartnerCredentials() {
     );
   }
 
-  return { clientId, clientSecret, gatewayEnv, gatewayUrl };
+  return { clientId, clientSecret, gatewayEnv };
 }
 
 /** Create a client from environment variables */
-export function createClientFromEnv(): RemoteClient {
-  const { clientId, clientSecret, gatewayEnv, gatewayUrl } = getPartnerCredentials();
-  const refreshToken = process.env.REFRESH_TOKEN;
+export function createClientFromEnv(gatewayEnvOverride?: string): RemoteClient {
+  const { clientId, clientSecret, gatewayEnv } = getPartnerCredentials(gatewayEnvOverride);
+  const refreshToken = gatewayEnv === "sandbox"
+    ? (process.env.SANDBOX_REFRESH_TOKEN || process.env.REFRESH_TOKEN)
+    : process.env.REFRESH_TOKEN;
 
   return new RemoteClient({
     clientId,
     clientSecret,
     gatewayEnv,
-    gatewayUrl,
     refreshToken,
   });
 }
 
 /** Create a client with a specific refresh token (company override) */
-export function createClientFromToken(refreshToken: string): RemoteClient {
-  const { clientId, clientSecret, gatewayEnv, gatewayUrl } = getPartnerCredentials();
+export function createClientFromToken(refreshToken: string, gatewayEnvOverride?: string): RemoteClient {
+  const { clientId, clientSecret, gatewayEnv } = getPartnerCredentials(gatewayEnvOverride);
 
   return new RemoteClient({
     clientId,
     clientSecret,
     gatewayEnv,
-    gatewayUrl,
     refreshToken,
   });
 }
 
 /** Create a client using client_credentials grant only (partner-level, no company scope) */
-export function createPartnerClient(): RemoteClient {
-  const { clientId, clientSecret, gatewayEnv, gatewayUrl } = getPartnerCredentials();
+export function createPartnerClient(gatewayEnvOverride?: string): RemoteClient {
+  const { clientId, clientSecret, gatewayEnv } = getPartnerCredentials(gatewayEnvOverride);
 
   return new RemoteClient({
     clientId,
     clientSecret,
     gatewayEnv,
-    gatewayUrl,
   });
 }

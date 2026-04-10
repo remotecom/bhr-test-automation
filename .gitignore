@@ -10,3 +10,4 @@ public/
 tsconfig.tsbuildinfo
 .vercel
 .env*.local
+app/local/

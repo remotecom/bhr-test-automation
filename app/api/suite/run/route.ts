@@ -15,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { put } from "@vercel/blob";
 import { runSuite } from "@/src/suite/runner";
+import { readRequestOverrides } from "@/src/client";
 
 export const maxDuration = 300;
 
@@ -52,9 +53,7 @@ export async function POST(request: Request) {
   const abort = new AbortController();
   currentAbort = abort;
 
-  // Read optional company override from headers
-  const companySlug = request.headers.get("X-Company-Slug") || undefined;
-  const refreshToken = request.headers.get("X-Refresh-Token") || undefined;
+  const { companySlug, refreshToken, gatewayEnv } = readRequestOverrides(request);
 
   // Parse optional test filter from request body
   let testFilter: string | undefined;
@@ -212,7 +211,7 @@ export async function POST(request: Request) {
       }
 
       // Run the suite in-process
-      runSuite(broadcast, { testFilter, signal: abort.signal, companySlug, refreshToken })
+      runSuite(broadcast, { testFilter, signal: abort.signal, companySlug, refreshToken, gatewayEnv })
         .catch((err) => {
           if (abort.signal.aborted) return; // Silently ignore aborted runs
           const msg = err instanceof Error ? err.message : String(err);

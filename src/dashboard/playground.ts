@@ -11,7 +11,7 @@
  * employment → subscriptions → [subscription selection] → contract details → sign → invite
  */
 
-import { createClientFromEnv, createClientFromToken } from "../client";
+import { createClientFromEnv, createClientFromToken, getCompanySlug } from "../client";
 import { getCountries, type Country } from "../steps/countries";
 import { createEmployment, cancelEmployment } from "../steps/employment";
 import {
@@ -49,6 +49,7 @@ export interface PlaygroundConfig {
   targetProduct?: string; // 'CM' | 'CM+' | 'COR' | undefined
   companySlug?: string;
   refreshToken?: string;
+  gatewayEnv?: string;
 }
 
 export interface PlaygroundResult {
@@ -82,7 +83,7 @@ export async function runPlayground(
   }
   activeRun = {};
 
-  const companySlug = config.companySlug || process.env.COMPANY_SLUG;
+  const companySlug = config.companySlug || getCompanySlug(config.gatewayEnv);
   if (!companySlug) {
     throw new Error("COMPANY_SLUG env var required");
   }
@@ -96,8 +97,8 @@ export async function runPlayground(
     });
 
     const client = config.refreshToken
-      ? createClientFromToken(config.refreshToken)
-      : createClientFromEnv();
+      ? createClientFromToken(config.refreshToken, config.gatewayEnv)
+      : createClientFromEnv(config.gatewayEnv);
     let entityId: string | undefined;
 
     // Step 1: Entity swap (optional)
@@ -305,23 +306,26 @@ export async function runPlayground(
 /** Cancel the most recently created playground employment */
 export async function cancelPlaygroundEmployment(
   employmentId: string,
-  broadcast: BroadcastFn
+  broadcast: BroadcastFn,
+  gatewayEnv?: string
 ): Promise<void> {
-  const client = createClientFromEnv();
+  const client = createClientFromEnv(gatewayEnv);
   await cancelEmployment(client, employmentId);
   broadcast("playground:cancelled", { employmentId });
 }
 
-/** Cached countries list for the playground dropdowns */
-let countriesCache: { data: Country[]; ts: number } | null = null;
+/** Cached countries list for the playground dropdowns, keyed by gateway env */
+const countriesCache = new Map<string, { data: Country[]; ts: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-export async function getCachedCountries(): Promise<Country[]> {
-  if (countriesCache && Date.now() - countriesCache.ts < CACHE_TTL) {
-    return countriesCache.data;
+export async function getCachedCountries(gatewayEnv?: string): Promise<Country[]> {
+  const key = gatewayEnv || "default";
+  const cached = countriesCache.get(key);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return cached.data;
   }
-  const client = createClientFromEnv();
+  const client = createClientFromEnv(gatewayEnv);
   const countries = await getCountries(client);
-  countriesCache = { data: countries, ts: Date.now() };
+  countriesCache.set(key, { data: countries, ts: Date.now() });
   return countries;
 }

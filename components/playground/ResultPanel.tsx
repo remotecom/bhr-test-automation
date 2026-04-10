@@ -1,8 +1,7 @@
 "use client";
 
 import type { PlaygroundResult } from "@/hooks/usePlayground";
-
-const SANDBOX_BASE = "https://employ.partners.remote-sandbox.com/dashboard";
+import { getDashboardBase } from "@/components/EnvironmentSelector";
 
 interface ResultPanelProps {
   result: PlaygroundResult | null;
@@ -144,7 +143,7 @@ export default function ResultPanel({ result, contractorCountry }: ResultPanelPr
           <>
             Employment:{" "}
             <a
-              href={`${SANDBOX_BASE}/people/${result.employmentId}/?selectedTab=profile`}
+              href={`${getDashboardBase()}/people/${result.employmentId}/?selectedTab=profile`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: "#58a6ff", textDecoration: "none" }}
@@ -157,7 +156,7 @@ export default function ResultPanel({ result, contractorCountry }: ResultPanelPr
           <>
             {" · "}Entity:{" "}
             <a
-              href={`${SANDBOX_BASE}/legal-entities/${result.entityId}/?selectedTab=details`}
+              href={`${getDashboardBase()}/legal-entities/${result.entityId}/?selectedTab=details`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: "#d29922", textDecoration: "none" }}

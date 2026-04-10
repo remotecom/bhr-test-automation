@@ -5,7 +5,7 @@
  * creates employments, walks transition chains, and streams SSE events.
  */
 
-import { createClientFromEnv, createClientFromToken, type RemoteClient } from "../client";
+import { createClientFromEnv, createClientFromToken, getCompanySlug, type RemoteClient } from "../client";
 import { LIFECYCLE_MATRIX, type LifecycleTestCase, type LifecycleTransition } from "@/data/lifecycle-matrix";
 import { swapDefaultEntity } from "../setup/entity-swap";
 import { createEmployment } from "../steps/employment";
@@ -34,20 +34,21 @@ export interface RunLifecycleOptions {
   signal?: AbortSignal;
   companySlug?: string;
   refreshToken?: string;
+  gatewayEnv?: string;
 }
 
 export async function runLifecycleSuite(
   broadcast: BroadcastFn,
   options?: RunLifecycleOptions
 ): Promise<void> {
-  const companySlug = options?.companySlug || process.env.COMPANY_SLUG;
+  const companySlug = options?.companySlug || getCompanySlug(options?.gatewayEnv);
   if (!companySlug) {
     throw new Error("COMPANY_SLUG env var required");
   }
 
   const client = options?.refreshToken
-    ? createClientFromToken(options.refreshToken)
-    : createClientFromEnv();
+    ? createClientFromToken(options.refreshToken, options?.gatewayEnv)
+    : createClientFromEnv(options?.gatewayEnv);
 
   // Filter: remove section headers, apply optional test filter
   let tests = LIFECYCLE_MATRIX.filter(
