@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import CompanySelector from "../CompanySelector";
 
-type Tab = "suite" | "playground";
+type Tab = "suite" | "playground" | "lifecycle";
 
 interface HeaderProps {
   status: {
@@ -20,6 +20,7 @@ interface HeaderProps {
 const tabs: { mode: Tab; label: string }[] = [
   { mode: "suite", label: "Test Suite" },
   { mode: "playground", label: "Playground" },
+  { mode: "lifecycle", label: "Lifecycle" },
 ];
 
 export default function Header({ status, activeTab, onTabChange, currentEntityName, onCompanyChange }: HeaderProps) {

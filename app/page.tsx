@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback } from "react";
 import Header from "@/components/layout/Header";
 import PlaygroundView from "@/components/playground/PlaygroundView";
 import SuiteView from "@/components/suite/SuiteView";
+import LifecycleView from "@/components/lifecycle/LifecycleView";
 import { getCompanyHeaders } from "@/components/CompanySelector";
 
-type Tab = "suite" | "playground";
+type Tab = "suite" | "playground" | "lifecycle";
 
 interface Country {
   code: string;
@@ -66,6 +67,7 @@ export default function MainPage() {
       {activeTab === "playground" && (
         <PlaygroundView countries={countries} contractors={contractors} onEntityChange={setCurrentEntityName} />
       )}
+      {activeTab === "lifecycle" && <LifecycleView />}
     </div>
   );
 }

@@ -151,6 +151,7 @@ export default function ConfigPanel({
       />
 
       <label style={labelStyle}>IR35 Status</label>
+      <span style={{ fontSize: "11px", color: "#484f58", display: "block", marginTop: "2px" }}>UK (GBR) only</span>
       <div
         style={{
           display: "flex",
@@ -190,6 +191,7 @@ export default function ConfigPanel({
       </div>
 
       <label style={labelStyle}>Nationality</label>
+      <span style={{ fontSize: "11px", color: "#484f58", display: "block", marginTop: "2px" }}>Required for BHR, SAU, KWT, OMN, QAT. Only BHR affects product availability (non-national blocks CM+/COR).</span>
       <div
         style={{
           display: "flex",

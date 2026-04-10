@@ -118,4 +118,48 @@ export const trace = {
     );
     emit("eligibility:result", { legalEntityId, ...result });
   },
+
+  // ── Lifecycle trace methods ─────────────────────────────────
+
+  lifecycleStatus(employmentId: string, status: string) {
+    write(
+      `  ${DIM}  Status: ${status}  ee=${employmentId}${RESET}`
+    );
+    emit("lifecycle:status", { employmentId, status });
+  },
+
+  lifecycleSandboxSet(employmentId: string, status: string) {
+    write(
+      `  ${YELLOW}⟳ Sandbox set${RESET}  ${DIM}status=${RESET}${status}  ${DIM}ee=${RESET}${employmentId}`
+    );
+    emit("lifecycle:sandbox-set", { employmentId, status });
+  },
+
+  lifecycleTransition(employmentId: string, step: string, action: string, actualStatus: string) {
+    write(
+      `  ${CYAN}→ Transition${RESET}  ${DIM}step=${RESET}${step}  ${DIM}action=${RESET}${action}  ${DIM}status=${RESET}${actualStatus}  ${DIM}ee=${RESET}${employmentId}`
+    );
+    emit("lifecycle:transition-trace", { employmentId, step, action, actualStatus });
+  },
+
+  lifecycleTermination(employmentId: string, terminationRequestId: string) {
+    write(
+      `  ${YELLOW}✕ COR Termination${RESET}  ${DIM}request=${RESET}${terminationRequestId}  ${DIM}ee=${RESET}${employmentId}`
+    );
+    emit("lifecycle:termination", { employmentId, terminationRequestId });
+  },
+
+  lifecyclePlanChange(employmentId: string, operation: string) {
+    write(
+      `  ${GREEN}↕ Plan change${RESET}  ${DIM}op=${RESET}${operation}  ${DIM}ee=${RESET}${employmentId}`
+    );
+    emit("lifecycle:plan-change", { employmentId, operation });
+  },
+
+  lifecycleWebhook(eventType: string, employmentId: string) {
+    write(
+      `  ${DIM}  Webhook: ${eventType}  ee=${employmentId}${RESET}`
+    );
+    emit("lifecycle:webhook", { eventType, employmentId });
+  },
 };
