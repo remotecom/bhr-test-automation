@@ -100,7 +100,45 @@ export function buildContractDetailsFromSchema(
   const inner = (schema as any).schema || schema;
   const pt = inner.properties?.payment_terms?.properties || {};
   const isCOR = !!pt.invoice_payment_due_days;
-  return isCOR ? buildCORDefaults() : buildCMDefaults();
+
+  const base = isCOR ? buildCORDefaults() : buildCMDefaults();
+
+  // Respect schema constraints for termination notice periods
+  const termProps = inner.properties?.termination?.properties || {};
+  const termination = base.termination as Record<string, unknown>;
+
+  if (termProps.contractor_notice_period_amount) {
+    const schemaMax = termProps.contractor_notice_period_amount.maximum;
+    const schemaMin = termProps.contractor_notice_period_amount.minimum;
+    const original = termination.contractor_notice_period_amount as number;
+    const capped = schemaMax != null ? Math.min(original, schemaMax) : original;
+    termination.contractor_notice_period_amount = capped;
+    trace.step(
+      `Termination schema: contractor_notice_period_amount` +
+      ` min=${schemaMin ?? "none"} max=${schemaMax ?? "none"}` +
+      ` → sending ${capped}` +
+      (capped !== original ? ` (capped from ${original})` : "")
+    );
+  }
+
+  if (termProps.company_notice_period_amount) {
+    const schemaMax = termProps.company_notice_period_amount.maximum;
+    const schemaMin = termProps.company_notice_period_amount.minimum;
+    const original = termination.company_notice_period_amount as number;
+    const capped = schemaMax != null ? Math.min(original, schemaMax) : original;
+    termination.company_notice_period_amount = capped;
+    trace.step(
+      `Termination schema: company_notice_period_amount` +
+      ` min=${schemaMin ?? "none"} max=${schemaMax ?? "none"}` +
+      ` → sending ${capped}` +
+      (capped !== original ? ` (capped from ${original})` : "")
+    );
+  } else {
+    delete termination.company_notice_period_amount;
+    trace.step(`Termination schema: company_notice_period_amount not in schema, omitting`);
+  }
+
+  return base;
 }
 
 /** Submit contract details, creating a contract document.
