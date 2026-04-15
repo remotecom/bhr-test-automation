@@ -34,6 +34,8 @@ import {
   buildPassingAnswers,
 } from "../steps/questionnaire";
 import {
+  getContractDetailsSchema,
+  buildContractDetailsFromSchema,
   submitContractDetails,
   previewContract,
 } from "../steps/contract-details";
@@ -247,11 +249,40 @@ export async function runPlayground(
       label: `${selectedProduct} selected. Submitting contract details...`,
     });
 
-    // Step 6: Submit contract details
+    // Step 6: Fetch schema, build details (respecting per-country constraints), submit
+    const schema = await getContractDetailsSchema(client, config.contractorCountry, employment.id);
+    const inner = (schema as any).schema || schema;
+    const termProps = inner.properties?.termination?.properties || {};
+    if (termProps.contractor_notice_period_amount) {
+      const { minimum: min, maximum: max } = termProps.contractor_notice_period_amount;
+      broadcast("playground:step", {
+        label: `// Termination schema: contractor_notice_period min=${min ?? "none"} max=${max ?? "none"}`,
+        side: true,
+      });
+    }
+    if (termProps.company_notice_period_amount) {
+      const { minimum: min, maximum: max } = termProps.company_notice_period_amount;
+      broadcast("playground:step", {
+        label: `// Termination schema: company_notice_period min=${min ?? "none"} max=${max ?? "none"}`,
+        side: true,
+      });
+    } else {
+      broadcast("playground:step", {
+        label: `// Termination schema: company_notice_period not in schema`,
+        side: true,
+      });
+    }
+    const contractDetails = buildContractDetailsFromSchema(schema);
+    const termValues = contractDetails.termination as Record<string, unknown>;
+    broadcast("playground:step", {
+      label: `// Sending termination: ${JSON.stringify(termValues)}`,
+      side: true,
+    });
     const contractDocId = await submitContractDetails(
       client,
       employment.id,
-      config.contractorCountry
+      config.contractorCountry,
+      contractDetails
     );
 
     // Step 6b: Preview (generates contract PDF)
