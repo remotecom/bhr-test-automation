@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import CompanySelector from "../CompanySelector";
 import EnvironmentSelector from "../EnvironmentSelector";
 
-export const LIFECYCLE_ENABLED = true;
+export const LIFECYCLE_ENABLED = false;
 
 type Tab = "suite" | "playground" | "lifecycle";
 
