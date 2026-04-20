@@ -6,7 +6,7 @@
  */
 
 import { runLifecycleSuite } from "@/src/suite/lifecycle-runner";
-import { readRequestOverrides } from "@/src/client";
+import { readRequestOverrides, requireCompany } from "@/src/client";
 
 export const maxDuration = 300;
 
@@ -14,6 +14,13 @@ let running = false;
 let currentAbort: AbortController | null = null;
 
 export async function POST(request: Request) {
+  const { companySlug, refreshToken, gatewayEnv } = readRequestOverrides(request);
+
+  const gate = requireCompany({ companySlug, refreshToken }, gatewayEnv);
+  if (!gate.ok) {
+    return Response.json({ error: gate.error }, { status: 400 });
+  }
+
   if (running && currentAbort) {
     currentAbort.abort();
   }
@@ -21,8 +28,6 @@ export async function POST(request: Request) {
   running = true;
   const abort = new AbortController();
   currentAbort = abort;
-
-  const { companySlug, refreshToken, gatewayEnv } = readRequestOverrides(request);
 
   let testFilter: string | undefined;
   try {

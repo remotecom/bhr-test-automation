@@ -77,11 +77,13 @@ These projects are always in context — consider cross-repo implications for an
 
 ## Environment Setup
 
-Required in `.env` (see `.env.example` for details):
-- `CLIENT_ID`, `CLIENT_SECRET`, `REFRESH_TOKEN` — Partner API OAuth credentials
-- `COMPANY_SLUG` — Company UUID
-- `GATEWAY_URL` — Sandbox API gateway URL
-- `JWT_SECRET` — For web dashboard auth
+Required in `.env` for the deployed app (see `.env.example` for details):
+- `CLIENT_ID`, `CLIENT_SECRET` — Partner API OAuth client (Partners sandbox)
+- `SANDBOX_CLIENT_ID`, `SANDBOX_CLIENT_SECRET` — Partner API OAuth client (Remote sandbox)
+- `GATEWAY_ENV` — Default gateway (`partners` or `sandbox`)
+- `JWT_SECRET` — Web dashboard session signing (app refuses to boot without it)
 - `AUTH_PASSWORD` — Web UI login password
 
-Optional: `VERBOSE_LOG=1` for API response logging.
+Optional — local Vitest runs only (NOT used by deployed dashboard; dashboard users connect via the CompanySelector UI):
+- `COMPANY_SLUG`, `REFRESH_TOKEN`, `SANDBOX_COMPANY_SLUG`, `SANDBOX_REFRESH_TOKEN`
+- `VERBOSE_LOG=1` for API response logging

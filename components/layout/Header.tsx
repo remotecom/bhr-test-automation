@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import CompanySelector from "../CompanySelector";
 import EnvironmentSelector from "../EnvironmentSelector";
 
-export const LIFECYCLE_ENABLED = false;
+export const LIFECYCLE_ENABLED = true;
 
 type Tab = "suite" | "playground" | "lifecycle";
 
@@ -19,6 +19,7 @@ interface HeaderProps {
   currentEntityName?: string | null;
   onCompanyChange?: () => void;
   onEnvironmentChange?: () => void;
+  gatewayEnv?: string;
 }
 
 const allTabs: { mode: Tab; label: string }[] = [
@@ -27,7 +28,7 @@ const allTabs: { mode: Tab; label: string }[] = [
   { mode: "lifecycle", label: "Lifecycle" },
 ];
 
-export default function Header({ status, activeTab, onTabChange, currentEntityName, onCompanyChange, onEnvironmentChange }: HeaderProps) {
+export default function Header({ status, activeTab, onTabChange, currentEntityName, onCompanyChange, onEnvironmentChange, gatewayEnv }: HeaderProps) {
   const router = useRouter();
   const tabs = LIFECYCLE_ENABLED ? allTabs : allTabs.filter((t) => t.mode !== "lifecycle");
 
@@ -75,7 +76,7 @@ export default function Header({ status, activeTab, onTabChange, currentEntityNa
 
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         <EnvironmentSelector onEnvironmentChange={onEnvironmentChange} />
-        <CompanySelector onCompanyChange={onCompanyChange} />
+        <CompanySelector onCompanyChange={onCompanyChange} gatewayEnv={gatewayEnv} />
         {currentEntityName ? (
           <span style={{ fontSize: "11px", color: "#d29922" }}>
             Def. LE: {currentEntityName}

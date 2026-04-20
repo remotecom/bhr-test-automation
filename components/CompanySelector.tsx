@@ -1,11 +1,41 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { getEnvironmentHeaders } from "./EnvironmentSelector";
+import { getEnvironmentHeaders, getSelectedEnv } from "./EnvironmentSelector";
 
-const LS_SLUG = "bhr_company_slug";
-const LS_TOKEN = "bhr_refresh_token";
-const LS_NAME = "bhr_company_name";
+const LS_SLUG_BASE = "bhr_company_slug";
+const LS_TOKEN_BASE = "bhr_refresh_token";
+const LS_NAME_BASE = "bhr_company_name";
+
+function lsKey(base: string, gatewayEnv: string) {
+  return `${base}__${gatewayEnv}`;
+}
+
+/**
+ * One-shot migration: if legacy unprefixed keys exist and no partners-scoped
+ * keys have been written yet, copy them under the partners namespace. This
+ * preserves users who connected a company before env namespacing landed.
+ */
+function migrateLegacyKeys() {
+  if (typeof window === "undefined") return;
+  const legacySlug = localStorage.getItem(LS_SLUG_BASE);
+  const legacyToken = localStorage.getItem(LS_TOKEN_BASE);
+  if (!legacySlug || !legacyToken) return;
+  const alreadyMigrated = localStorage.getItem(lsKey(LS_SLUG_BASE, "partners"));
+  if (alreadyMigrated) {
+    localStorage.removeItem(LS_SLUG_BASE);
+    localStorage.removeItem(LS_TOKEN_BASE);
+    localStorage.removeItem(LS_NAME_BASE);
+    return;
+  }
+  localStorage.setItem(lsKey(LS_SLUG_BASE, "partners"), legacySlug);
+  localStorage.setItem(lsKey(LS_TOKEN_BASE, "partners"), legacyToken);
+  const legacyName = localStorage.getItem(LS_NAME_BASE);
+  if (legacyName) localStorage.setItem(lsKey(LS_NAME_BASE, "partners"), legacyName);
+  localStorage.removeItem(LS_SLUG_BASE);
+  localStorage.removeItem(LS_TOKEN_BASE);
+  localStorage.removeItem(LS_NAME_BASE);
+}
 
 export interface CompanyOverride {
   companySlug: string;
@@ -13,22 +43,24 @@ export interface CompanyOverride {
   companyName?: string;
 }
 
-/** Read company override from localStorage (null = use env default) */
-export function getCompanyOverride(): CompanyOverride | null {
+/** Read company override from localStorage for the given (or currently selected) gateway env */
+export function getCompanyOverride(gatewayEnv?: string): CompanyOverride | null {
   if (typeof window === "undefined") return null;
-  const slug = localStorage.getItem(LS_SLUG);
-  const token = localStorage.getItem(LS_TOKEN);
+  migrateLegacyKeys();
+  const env = gatewayEnv || getSelectedEnv();
+  const slug = localStorage.getItem(lsKey(LS_SLUG_BASE, env));
+  const token = localStorage.getItem(lsKey(LS_TOKEN_BASE, env));
   if (!slug || !token) return null;
   return {
     companySlug: slug,
     refreshToken: token,
-    companyName: localStorage.getItem(LS_NAME) || slug,
+    companyName: localStorage.getItem(lsKey(LS_NAME_BASE, env)) || slug,
   };
 }
 
-/** Build headers for API calls when company override is active */
-export function getCompanyHeaders(): Record<string, string> {
-  const override = getCompanyOverride();
+/** Build headers for API calls when company override is active (env-scoped) */
+export function getCompanyHeaders(gatewayEnv?: string): Record<string, string> {
+  const override = getCompanyOverride(gatewayEnv);
   if (!override) return {};
   return {
     "X-Company-Slug": override.companySlug,
@@ -36,38 +68,44 @@ export function getCompanyHeaders(): Record<string, string> {
   };
 }
 
-function saveOverride(slug: string, token: string, name?: string) {
-  localStorage.setItem(LS_SLUG, slug);
-  localStorage.setItem(LS_TOKEN, token);
-  if (name) localStorage.setItem(LS_NAME, name);
+function saveOverride(env: string, slug: string, token: string, name?: string) {
+  localStorage.setItem(lsKey(LS_SLUG_BASE, env), slug);
+  localStorage.setItem(lsKey(LS_TOKEN_BASE, env), token);
+  if (name) localStorage.setItem(lsKey(LS_NAME_BASE, env), name);
 }
 
-function clearOverride() {
-  localStorage.removeItem(LS_SLUG);
-  localStorage.removeItem(LS_TOKEN);
-  localStorage.removeItem(LS_NAME);
+function clearOverride(env: string) {
+  localStorage.removeItem(lsKey(LS_SLUG_BASE, env));
+  localStorage.removeItem(lsKey(LS_TOKEN_BASE, env));
+  localStorage.removeItem(lsKey(LS_NAME_BASE, env));
 }
 
 interface CompanySelectorProps {
   onCompanyChange?: () => void;
+  gatewayEnv?: string;
 }
 
-export default function CompanySelector({ onCompanyChange }: CompanySelectorProps) {
+export default function CompanySelector({ onCompanyChange, gatewayEnv }: CompanySelectorProps) {
   const [open, setOpen] = useState(false);
   const [override, setOverride] = useState<CompanyOverride | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tokenInput, setTokenInput] = useState("");
   const [showTokenInput, setShowTokenInput] = useState(false);
+  const [currentEnv, setCurrentEnv] = useState<string>("partners");
 
   useEffect(() => {
-    setOverride(getCompanyOverride());
-  }, []);
+    const env = gatewayEnv || getSelectedEnv();
+    setCurrentEnv(env);
+    const current = getCompanyOverride(env);
+    setOverride(current);
+    if (!current) setOpen(true);
+  }, [gatewayEnv]);
 
   const refresh = useCallback(() => {
-    setOverride(getCompanyOverride());
+    setOverride(getCompanyOverride(currentEnv));
     onCompanyChange?.();
-  }, [onCompanyChange]);
+  }, [onCompanyChange, currentEnv]);
 
   async function handleCreateCompany() {
     setLoading(true);
@@ -76,7 +114,7 @@ export default function CompanySelector({ onCompanyChange }: CompanySelectorProp
       const res = await fetch("/api/company/create", { method: "POST", headers: getEnvironmentHeaders() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
-      saveOverride(data.company_slug, data.refresh_token, data.name);
+      saveOverride(currentEnv, data.company_slug, data.refresh_token, data.name);
       refresh();
       setOpen(false);
     } catch (err) {
@@ -98,7 +136,7 @@ export default function CompanySelector({ onCompanyChange }: CompanySelectorProp
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
-      saveOverride(data.company_slug, tokenInput.trim(), data.company_name);
+      saveOverride(currentEnv, data.company_slug, tokenInput.trim(), data.company_name);
       refresh();
       setTokenInput("");
       setShowTokenInput(false);
@@ -110,16 +148,19 @@ export default function CompanySelector({ onCompanyChange }: CompanySelectorProp
     }
   }
 
-  function handleReset() {
-    clearOverride();
+  function handleDisconnect() {
+    clearOverride(currentEnv);
     refresh();
-    setOpen(false);
+    setOpen(true);
   }
 
-  const isCustom = override !== null;
-  const label = isCustom
+  const isConnected = override !== null;
+  const label = isConnected
     ? override.companyName || override.companySlug
-    : "Default Company";
+    : "No company connected";
+  const dotColor = isConnected ? "#3fb950" : "#d29922";
+  const borderColor = isConnected ? "#30363d" : "#d29922";
+  const textColor = isConnected ? "#8b949e" : "#d29922";
 
   return (
     <div style={{ position: "relative" }}>
@@ -127,12 +168,12 @@ export default function CompanySelector({ onCompanyChange }: CompanySelectorProp
         onClick={() => setOpen(!open)}
         style={{
           background: "none",
-          border: `1px solid ${isCustom ? "#d29922" : "#30363d"}`,
+          border: `1px solid ${borderColor}`,
           borderRadius: "6px",
           padding: "4px 10px",
           fontFamily: "inherit",
           fontSize: "11px",
-          color: isCustom ? "#d29922" : "#8b949e",
+          color: textColor,
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
@@ -144,7 +185,7 @@ export default function CompanySelector({ onCompanyChange }: CompanySelectorProp
             width: "6px",
             height: "6px",
             borderRadius: "50%",
-            background: isCustom ? "#d29922" : "#3fb950",
+            background: dotColor,
           }}
         />
         {label.length > 20 ? label.slice(0, 18) + "..." : label}
@@ -167,7 +208,7 @@ export default function CompanySelector({ onCompanyChange }: CompanySelectorProp
           }}
         >
           <div style={{ fontSize: "11px", color: "#8b949e", marginBottom: "8px" }}>
-            {isCustom ? (
+            {isConnected ? (
               <>
                 Using: <strong style={{ color: "#d29922" }}>{override.companyName || override.companySlug}</strong>
                 <br />
@@ -176,7 +217,7 @@ export default function CompanySelector({ onCompanyChange }: CompanySelectorProp
                 </span>
               </>
             ) : (
-              "Using environment default company"
+              "Pick one to get started"
             )}
           </div>
 
@@ -265,9 +306,9 @@ export default function CompanySelector({ onCompanyChange }: CompanySelectorProp
             </div>
           )}
 
-          {isCustom && (
+          {isConnected && (
             <button
-              onClick={handleReset}
+              onClick={handleDisconnect}
               style={{
                 width: "100%",
                 background: "none",
@@ -280,7 +321,7 @@ export default function CompanySelector({ onCompanyChange }: CompanySelectorProp
                 cursor: "pointer",
               }}
             >
-              Reset to Default
+              Disconnect
             </button>
           )}
         </div>

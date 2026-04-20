@@ -6,8 +6,9 @@ import { LIFECYCLE_ENABLED } from "@/components/layout/Header";
 import PlaygroundView from "@/components/playground/PlaygroundView";
 import SuiteView from "@/components/suite/SuiteView";
 import LifecycleView from "@/components/lifecycle/LifecycleView";
-import { getCompanyHeaders } from "@/components/CompanySelector";
-import { getEnvironmentHeaders } from "@/components/EnvironmentSelector";
+import ConnectCompanyBanner from "@/components/ConnectCompanyBanner";
+import { getCompanyHeaders, getCompanyOverride } from "@/components/CompanySelector";
+import { getEnvironmentHeaders, getSelectedEnv } from "@/components/EnvironmentSelector";
 
 type Tab = "suite" | "playground" | "lifecycle";
 
@@ -29,12 +30,27 @@ export default function MainPage() {
   const [contractors, setContractors] = useState<Record<string, { contractor?: { full_name?: string; email?: string; job_title?: string } }>>({});
   const [currentEntityName, setCurrentEntityName] = useState<string | null>(null);
   const [companyVersion, setCompanyVersion] = useState(0);
+  const [gatewayEnv, setGatewayEnv] = useState<string>("partners");
+  const [hasCompany, setHasCompany] = useState<boolean>(false);
 
   const handleCompanyChange = useCallback(() => {
+    setGatewayEnv(getSelectedEnv());
+    setHasCompany(getCompanyOverride() !== null);
     setCompanyVersion((v) => v + 1);
   }, []);
 
   useEffect(() => {
+    setGatewayEnv(getSelectedEnv());
+    setHasCompany(getCompanyOverride() !== null);
+  }, []);
+
+  useEffect(() => {
+    if (!hasCompany) {
+      setStatus({ connected: false });
+      setCountries([]);
+      setContractors({});
+      return;
+    }
     const headers = { ...getCompanyHeaders(), ...getEnvironmentHeaders() };
 
     fetch("/api/status", { headers })
@@ -57,19 +73,33 @@ export default function MainPage() {
       .then((r) => r.json())
       .then((data) => setContractors(data || {}))
       .catch(() => {});
-  }, [companyVersion]);
+  }, [companyVersion, hasCompany]);
 
   const handleTabChange = useCallback((tab: Tab) => setActiveTab(tab), []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <Header status={status} activeTab={activeTab} onTabChange={handleTabChange} currentEntityName={currentEntityName} onCompanyChange={handleCompanyChange} onEnvironmentChange={handleCompanyChange} />
+      <Header
+        status={status}
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        currentEntityName={currentEntityName}
+        onCompanyChange={handleCompanyChange}
+        onEnvironmentChange={handleCompanyChange}
+        gatewayEnv={gatewayEnv}
+      />
 
-      {activeTab === "suite" && <SuiteView />}
-      {activeTab === "playground" && (
-        <PlaygroundView countries={countries} contractors={contractors} onEntityChange={setCurrentEntityName} />
+      {!hasCompany ? (
+        <ConnectCompanyBanner />
+      ) : (
+        <>
+          {activeTab === "suite" && <SuiteView />}
+          {activeTab === "playground" && (
+            <PlaygroundView countries={countries} contractors={contractors} onEntityChange={setCurrentEntityName} />
+          )}
+          {LIFECYCLE_ENABLED && activeTab === "lifecycle" && <LifecycleView />}
+        </>
       )}
-      {LIFECYCLE_ENABLED && activeTab === "lifecycle" && <LifecycleView />}
     </div>
   );
 }

@@ -1,10 +1,15 @@
 import { runPlayground } from "@/src/dashboard/playground";
-import { readRequestOverrides } from "@/src/client";
+import { readRequestOverrides, requireCompany } from "@/src/client";
 
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const { companySlug, refreshToken, gatewayEnv } = readRequestOverrides(request);
+
+  const gate = requireCompany({ companySlug, refreshToken }, gatewayEnv);
+  if (!gate.ok) {
+    return Response.json({ error: gate.error }, { status: 400 });
+  }
 
   const body = await request.json();
   const config = { ...body, companySlug, refreshToken, gatewayEnv };

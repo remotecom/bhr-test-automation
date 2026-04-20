@@ -1,18 +1,17 @@
-import { createClientFromEnv, createClientFromToken, readRequestOverrides, getCompanySlug } from "@/src/client";
+import { createClientFromToken, readRequestOverrides, requireCompany } from "@/src/client";
 
 export async function GET(request: Request) {
   try {
-    const { companySlug: overrideSlug, refreshToken: overrideToken, gatewayEnv } = readRequestOverrides(request);
+    const overrides = readRequestOverrides(request);
+    const { gatewayEnv } = overrides;
 
-    const client = overrideToken
-      ? createClientFromToken(overrideToken, gatewayEnv)
-      : createClientFromEnv(gatewayEnv);
-
-    const slug = overrideSlug || getCompanySlug(gatewayEnv);
-    if (!slug) {
-      return Response.json({ error: "COMPANY_SLUG not set" }, { status: 500 });
+    const gate = requireCompany(overrides, gatewayEnv);
+    if (!gate.ok) {
+      return Response.json({ error: gate.error }, { status: 400 });
     }
-    const result = await client.get(`/v1/companies/${slug}`);
+
+    const client = createClientFromToken(gate.refreshToken, gatewayEnv);
+    const result = await client.get(`/v1/companies/${gate.slug}`);
     const body = result.data as { data: { company: Record<string, unknown> } };
     const company = body.data.company;
 
@@ -21,7 +20,7 @@ export async function GET(request: Request) {
       slug: company.id,
       status: company.status,
       country: company.country_code,
-      source: overrideToken ? "custom" : "env",
+      source: overrides.refreshToken ? "custom" : "env",
     });
   } catch (err) {
     return Response.json(

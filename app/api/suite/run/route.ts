@@ -15,7 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { put } from "@vercel/blob";
 import { runSuite } from "@/src/suite/runner";
-import { readRequestOverrides } from "@/src/client";
+import { readRequestOverrides, requireCompany } from "@/src/client";
 
 export const maxDuration = 300;
 
@@ -44,6 +44,13 @@ function extractTestId(name: string): string {
 }
 
 export async function POST(request: Request) {
+  const { companySlug, refreshToken, gatewayEnv } = readRequestOverrides(request);
+
+  const gate = requireCompany({ companySlug, refreshToken }, gatewayEnv);
+  if (!gate.ok) {
+    return Response.json({ error: gate.error }, { status: 400 });
+  }
+
   // Abort previous run if still in progress
   if (running && currentAbort) {
     currentAbort.abort();
@@ -52,8 +59,6 @@ export async function POST(request: Request) {
   running = true;
   const abort = new AbortController();
   currentAbort = abort;
-
-  const { companySlug, refreshToken, gatewayEnv } = readRequestOverrides(request);
 
   // Parse optional test filter from request body
   let testFilter: string | undefined;

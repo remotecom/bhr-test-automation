@@ -165,6 +165,32 @@ export function readRequestOverrides(request: Request) {
 }
 
 /**
+ * Resolve the company slug + refresh token for a request.
+ *
+ * Returns `{ ok: false, error }` when nothing is available — API routes should
+ * surface this as a 400 so the UI can prompt the user to connect a company.
+ * Falls back to env vars for local Vitest runs that still ship a personal sandbox.
+ */
+export function requireCompany(
+  overrides: { companySlug?: string; refreshToken?: string },
+  gatewayEnv?: string
+):
+  | { ok: true; slug: string; refreshToken: string }
+  | { ok: false; error: string } {
+  const slug = overrides.companySlug || getCompanySlug(gatewayEnv);
+  const refreshToken =
+    overrides.refreshToken ||
+    (gatewayEnv === "sandbox"
+      ? process.env.SANDBOX_REFRESH_TOKEN || process.env.REFRESH_TOKEN
+      : process.env.REFRESH_TOKEN);
+
+  if (!slug || !refreshToken) {
+    return { ok: false, error: "Connect a company to continue" };
+  }
+  return { ok: true, slug, refreshToken };
+}
+
+/**
  * Read credentials from env, selecting the right set based on gateway env.
  *
  * Unprefixed vars (CLIENT_ID, CLIENT_SECRET) are the default (partners).
