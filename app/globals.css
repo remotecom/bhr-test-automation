@@ -231,3 +231,100 @@ tr:hover .btn-run-single { opacity: 0.9; color: #e6edf3; }
 
 /* Time column */
 .col-time { color: #484f58; font-size: 11px; }
+
+/* ── Payroll (GP capability report) ─────────────────────────────── */
+.gp-btn-cancel { background: #6e2a2a; border-color: #f85149; }
+.gp-btn-cancel:hover { background: #8b3434; }
+.gp-select, .gp-input {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+.gp-input { width: 220px; }
+.gp-search { width: 160px; margin-left: 8px; }
+.gp-sep { color: #30363d; }
+.gp-subbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 20px;
+  border-bottom: 1px solid #21262d;
+}
+.gp-chips, .gp-exports { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.gp-chip {
+  background: none;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  color: #8b949e;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+.gp-chip:hover:not(:disabled) { color: #c9d1d9; border-color: #58a6ff; }
+.gp-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+.gp-chip-on { color: #58a6ff; border-color: #58a6ff; background: #0d1117; }
+.gp-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 20px;
+  font-size: 11px;
+  color: #8b949e;
+  border-bottom: 1px solid #21262d;
+}
+.gp-info code, .gp-detail code {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-right: 4px;
+  font-size: 11px;
+  color: #c9d1d9;
+}
+.gp-muted { color: #484f58; }
+.gp-observed { color: #d2a8ff; }
+.gp-empty { text-align: center; color: #484f58; padding: 24px; }
+
+.gp-table .gp-col-code { width: 56px; }
+.gp-table .gp-col-name { width: auto; }
+.gp-table .gp-col-entity { width: 72px; white-space: nowrap; }
+.gp-table .gp-col-cov { width: 84px; }
+.gp-table .gp-col-form { width: 62px; text-align: center; }
+.gp-table .gp-col-base { width: 96px; white-space: nowrap; }
+
+.gp-form-yes { color: #3fb950; }
+.gp-form-no { color: #484f58; }
+.gp-form-na { color: #30363d; }
+.gp-form-err { color: #f85149; font-weight: 600; }
+.gp-sup { color: #d29922; font-weight: 700; margin-left: 1px; }
+.gp-entity-on { color: #3fb950; text-decoration: none; }
+.gp-entity-off { color: #d29922; text-decoration: none; }
+a.gp-entity-on:hover, a.gp-entity-off:hover { text-decoration: underline; }
+
+.gp-cov { font-size: 11px; padding: 0 6px; border-radius: 3px; border: 1px solid #30363d; }
+.gp-cov-full { color: #3fb950; border-color: #238636; }
+.gp-cov-employer_only, .gp-cov-employee_only { color: #d29922; border-color: #9e6a03; }
+.gp-cov-none { color: #484f58; }
+.gp-cov-unknown { color: #f85149; border-color: #da3633; }
+
+.gp-detail-row td { background: #0f141a; padding: 0; }
+.gp-detail { display: flex; gap: 24px; padding: 10px 16px 12px 40px; font-size: 11px; line-height: 1.6; }
+.gp-detail-col { flex: 1; min-width: 0; }
+.gp-detail-wide { flex: 2; }
+.gp-detail-title {
+  color: #8b949e;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+.gp-form-detail { margin-bottom: 6px; }
+.gp-fields { padding-left: 14px; word-break: break-word; }
+.gp-fields-label { color: #484f58; }

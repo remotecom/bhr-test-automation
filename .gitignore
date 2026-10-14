@@ -4,6 +4,8 @@ dist/
 *.log
 data/last-run.json
 data/mega-run.json
+data/gp-capabilities-last-run.json
+data/gp-reports/
 .vercel/
 public/
 .next/

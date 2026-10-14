@@ -5,6 +5,9 @@
     },
     "app/api/suite/run/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/gp/capabilities/run/route.ts": {
+      "maxDuration": 300
     }
   }
 }

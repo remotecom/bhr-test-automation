@@ -6,7 +6,7 @@ import EnvironmentSelector from "../EnvironmentSelector";
 
 export const LIFECYCLE_ENABLED = false;
 
-type Tab = "suite" | "playground" | "lifecycle";
+type Tab = "suite" | "playground" | "payroll" | "lifecycle";
 
 interface HeaderProps {
   status: {
@@ -25,6 +25,7 @@ interface HeaderProps {
 const allTabs: { mode: Tab; label: string }[] = [
   { mode: "suite", label: "Test Suite" },
   { mode: "playground", label: "Playground" },
+  { mode: "payroll", label: "Payroll (GP)" },
   { mode: "lifecycle", label: "Lifecycle" },
 ];
 

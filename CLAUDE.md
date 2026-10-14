@@ -55,6 +55,15 @@ Tests exercise a 5-stage product funnel that narrows available products:
 - **`hooks/useSuite.ts` / `usePlayground.ts`** — SSE streaming state management hooks.
 - **`middleware.ts`** — JWT auth on all routes except `/login`.
 
+### Global Payroll (GP) capability report
+
+Read-only Payroll (GP) tab plus CLI. Probes `GET /v1/countries/{cc}/global_payroll_*` per country, reads `global_payroll_enabled` on company legal entities, and compares against `data/gp-capability-baseline.ts` (match / drift). Always use the `global_payroll_` prefixed form names; unprefixed names return EOR schemas with 200. Code lives in `src/gp/`, `src/steps/gp-forms.ts`, `app/api/gp/capabilities/*`, `components/payroll/`. See `docs/gp-capabilities.md`.
+
+```bash
+npm run gp:capabilities -- --countries GBR,DEU --strict   # CLI/CI, exits 1 on drift
+npm run test:gp-unit                                      # pure unit tests, no network
+```
+
 ### API Route Headers
 
 Suite and playground API routes accept `X-Company-Slug` and `X-Refresh-Token` headers to override env defaults.

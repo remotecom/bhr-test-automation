@@ -6,11 +6,12 @@ import { LIFECYCLE_ENABLED } from "@/components/layout/Header";
 import PlaygroundView from "@/components/playground/PlaygroundView";
 import SuiteView from "@/components/suite/SuiteView";
 import LifecycleView from "@/components/lifecycle/LifecycleView";
+import PayrollView from "@/components/payroll/PayrollView";
 import ConnectCompanyBanner from "@/components/ConnectCompanyBanner";
 import { getCompanyHeaders, getCompanyOverride } from "@/components/CompanySelector";
 import { getEnvironmentHeaders, getSelectedEnv } from "@/components/EnvironmentSelector";
 
-type Tab = "suite" | "playground" | "lifecycle";
+type Tab = "suite" | "playground" | "payroll" | "lifecycle";
 
 interface Country {
   code: string;
@@ -97,6 +98,7 @@ export default function MainPage() {
           {activeTab === "playground" && (
             <PlaygroundView countries={countries} contractors={contractors} onEntityChange={setCurrentEntityName} />
           )}
+          {activeTab === "payroll" && <PayrollView />}
           {LIFECYCLE_ENABLED && activeTab === "lifecycle" && <LifecycleView />}
         </>
       )}

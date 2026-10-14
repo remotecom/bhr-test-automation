@@ -12,6 +12,8 @@
     "test:cor-ir35": "vitest run tests/cor-ir35-path.test.ts",
     "test:eor": "vitest run tests/eor-fallback-path.test.ts",
     "test:readonly": "vitest run tests/read-only.test.ts",
+    "test:gp-unit": "vitest run tests/gp-capabilities.unit.test.ts",
+    "gp:capabilities": "npx tsx src/gp/cli.ts",
     "dev": "next dev",
     "build": "next build",
     "start:next": "next start",
