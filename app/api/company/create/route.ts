@@ -29,8 +29,11 @@ export async function POST(request: Request) {
     });
 
     if (createRes.status >= 400) {
+      // Surface the API's reason (e.g. "not allowed to use the `get_oauth_access_tokens` action")
+      const d = createRes.data as unknown as { message?: string; errors?: unknown } | null;
+      const reason = d?.message || (d?.errors ? JSON.stringify(d.errors) : "");
       return Response.json(
-        { error: `Company creation failed (${createRes.status})`, details: createRes.data },
+        { error: `Company creation failed (${createRes.status})${reason ? `: ${reason}` : ""}`, details: createRes.data },
         { status: createRes.status }
       );
     }
