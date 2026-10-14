@@ -288,13 +288,15 @@ tr:hover .btn-run-single { opacity: 0.9; color: #e6edf3; }
   flex: 1 1 220px; margin-left: auto; display: flex; flex-direction: column; align-items: flex-end;
   justify-content: space-between; gap: 4px; font-size: 11px;
 }
-.gp-company { text-align: right; overflow-wrap: anywhere; }
+.gp-company { text-align: right; overflow-wrap: anywhere; cursor: help; }
 
-.gp-help {
-  display: flex; flex-direction: column; gap: 4px; padding: 8px 20px;
-  font-size: 11px; color: #8b949e; background: #0f141a; border-bottom: 1px solid #21262d;
+.gp-legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px;
+  padding: 6px 20px; font-size: 11px; color: #8b949e; border-bottom: 1px solid #21262d;
 }
-.gp-help code, .gp-detail code {
+.gp-legend-item { white-space: nowrap; }
+.gp-legend-item .gp-pill { margin-right: 2px; }
+.gp-detail code {
   background: #161b22; border: 1px solid #30363d; border-radius: 3px;
   padding: 0 4px; margin-right: 4px; font-size: 11px; color: #c9d1d9;
 }
@@ -310,7 +312,7 @@ tr:hover .btn-run-single { opacity: 0.9; color: #e6edf3; }
 .gp-w-employer { width: 22%; }
 .gp-w-employee { width: 20%; }
 .gp-w-notes { width: auto; }
-.gp-w-entity { width: 70px; }
+.gp-w-entity { width: 120px; }
 .gp-col-country { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gp-col-forms { white-space: normal; line-height: 22px; }
 .gp-col-notes { color: #8b949e; font-size: 11px; overflow-wrap: anywhere; }

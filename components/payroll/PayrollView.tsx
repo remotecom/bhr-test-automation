@@ -94,10 +94,10 @@ function EntityCell({ c }: { c: CountryCapability }) {
       href={`${getDashboardBase()}/legal-entities/${entityIds[0]}/?selectedTab=details`}
       target="_blank"
       rel="noopener noreferrer"
-      title={status === "gp_enabled" ? "Your company has a GP-enabled entity here" : "Your company has an entity here, but GP is not enabled on it"}
+      title={status === "gp_enabled" ? "Your test company has a GP-enabled entity here" : "Your test company has an entity here, but GP is not switched on for it. This doesn't affect the report."}
       onClick={(e) => e.stopPropagation()}
     >
-      {status === "gp_enabled" ? "GP on" : "GP off"}
+      {status === "gp_enabled" ? "GP enabled" : "GP not enabled"}
     </a>
   );
 }
@@ -199,7 +199,6 @@ export default function PayrollView() {
   const [view, setView] = useState<View>("all");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     loadLastRun();
@@ -252,9 +251,14 @@ export default function PayrollView() {
 
   const pick = (v: View) => setView((cur) => (cur === v ? "all" : v));
   const progress = queue.length ? Math.round((results.size / queue.length) * 100) : 0;
-  const companyLine = entities.length
-    ? entities.map((e) => `${e.countryCode} (GP ${e.gpEnabled ? "on" : "off"})`).join(", ")
-    : entitiesError ? "not checked" : "no entities";
+  const countryName = (code: string) => results.get(code)?.name || code;
+  const entityLine = entitiesError
+    ? "Test company entities: not checked"
+    : entities.length === 0
+      ? "Test company has no legal entities"
+      : "Test company: " + entities
+          .map((e) => `${countryName(e.countryCode)} entity, GP ${e.gpEnabled ? "enabled" : "not enabled"}`)
+          .join("; ");
 
   return (
     <div className="suite-view gp-view">
@@ -318,27 +322,28 @@ export default function PayrollView() {
         />
         <div className="gp-cards-side">
           <input className="gp-input gp-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search country" />
-          <div className="gp-muted gp-company" title={entitiesError || ""}>Your company: {companyLine}</div>
-          <button className="gp-link-btn" onClick={() => setShowHelp((v) => !v)}>{showHelp ? "Hide" : "How to read this"}</button>
+          <div
+            className="gp-muted gp-company"
+            title={
+              entitiesError ||
+              "Whether the connected test company can onboard GP employees in a country. Only matters for onboarding tests; this report reads the country forms and works either way. " +
+              "To enable GP on a sandbox entity: POST /v1/sandbox/companies/{id}/legal-entities/{entity_id}/activate-global-payroll"
+            }
+          >
+            {entityLine}
+          </div>
         </div>
       </div>
 
-      {showHelp && (
-        <div className="gp-help">
-          <div>
-            Each country is checked with <code>GET /v1/countries/&#123;cc&#125;/global_payroll_*</code> (read-only).{" "}
-            <b>Supported</b> means contract details (employer) and personal details (employee) are both published.
-          </div>
-          <div>
-            <span className="gp-pill gp-pill-on">Form</span> published ·{" "}
-            <span className="gp-pill gp-pill-on gp-pill-gated">Form</span> published, schema needs an employment ·{" "}
-            <span className="gp-pill gp-pill-off">Form</span> not available ·{" "}
-            <span className="gp-pill gp-pill-on gp-pill-flag">Form</span> skips a field the API may still require ·{" "}
-            <span className="gp-pill gp-pill-err">Form</span> probe error
-          </div>
-          <div>Baseline: {GP_BASELINE_SOURCE}. A country only turns red when it differs from the baseline or the probe fails.</div>
-        </div>
-      )}
+      {/* Legend: always visible, one line */}
+      <div className="gp-legend">
+        <span className="gp-legend-item"><span className="gp-pill gp-pill-on">Form</span> published</span>
+        <span className="gp-legend-item"><span className="gp-pill gp-pill-on gp-pill-gated">Form</span> published, needs an employment to read</span>
+        <span className="gp-legend-item"><span className="gp-pill gp-pill-off">Form</span> not available</span>
+        <span className="gp-legend-item"><span className="gp-pill gp-pill-on gp-pill-flag">Form</span> skips a field the API may require</span>
+        <span className="gp-legend-item"><span className="gp-pill gp-pill-err">Form</span> error</span>
+        <span className="gp-legend-item gp-muted" title={`Baseline: ${GP_BASELINE_SOURCE}`}>Red only when a country differs from the baseline or the check fails</span>
+      </div>
 
       <div className="table-wrap">
         {all.length === 0 ? (
@@ -356,7 +361,7 @@ export default function PayrollView() {
                     <th className="gp-col-forms gp-w-employer">Employer</th>
                     <th className="gp-col-forms gp-w-employee">Employee</th>
                     <th className="gp-col-notes gp-w-notes gp-hide-sm">Notes</th>
-                    <th className="gp-col-entity gp-w-entity gp-hide-md">Entity</th>
+                    <th className="gp-col-entity gp-w-entity gp-hide-md" title="GP status of the connected test company's entity in this country">Test company</th>
                   </tr>
                 </thead>
                 <tbody>
