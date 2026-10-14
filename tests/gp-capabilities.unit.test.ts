@@ -11,6 +11,7 @@ import type { RemoteClient } from "../src/client";
 import { toMarkdown, toMatrixCSV, toTestCasesCSV, TEST_GUIDE_COLUMNS } from "../src/gp/export";
 import { GP_BASELINE } from "../data/gp-capability-baseline";
 import type { CountryCapability, FormProbe, GPRunReport } from "../src/gp/types";
+import { loadLocal, saveLocal, storageKey } from "../hooks/useGPCapabilities";
 
 // Shaped like the GBR contract details schema before PBYR-4962
 const GBR_CONTRACT = {
@@ -166,5 +167,51 @@ describe("GP export", () => {
     const md = toMarkdown(report);
     expect(md).toContain("| GBR | United Kingdom | Full (employer + employee) |");
     expect(md).toContain("Fields the form skips");
+  });
+});
+
+describe("GP last run is kept per browser, environment and company", () => {
+  const store: Record<string, string> = {};
+  const g = globalThis as unknown as Record<string, unknown>;
+  const connect = (env: string, slug: string) => {
+    store["bhr_gateway_env"] = env;
+    store[`bhr_company_slug__${env}`] = slug;
+    store[`bhr_refresh_token__${env}`] = "rt";
+  };
+  const reportFor = (slug: string): GPRunReport => ({
+    timestamp: "2026-10-14T12:00:00.000Z", gatewayEnv: "x", companySlug: slug, scope: "baseline",
+    baselineSource: "", catalogAdvertisesGP: false, entities: [], summary: summarize([], 0), countries: [],
+  });
+
+  g.window = globalThis;
+  g.localStorage = {
+    getItem: (k: string) => (k in store ? store[k] : null),
+    setItem: (k: string, v: string) => { store[k] = String(v); },
+    removeItem: (k: string) => { delete store[k]; },
+  };
+
+  it("GP-U13 a run is only loaded back for the same environment and company", () => {
+    store["bhr_company_slug__partners"] = "migrated"; // skip the legacy-key migration
+    connect("sandbox", "company-c");
+    saveLocal(reportFor("company-c"), storageKey());
+    expect(loadLocal()?.companySlug).toBe("company-c");
+
+    connect("sandbox", "company-a");          // different company, same environment
+    expect(loadLocal()).toBeNull();
+
+    connect("partners", "company-c");         // same company ID, other environment
+    expect(loadLocal()).toBeNull();
+
+    connect("sandbox", "company-c");          // back to the original
+    expect(loadLocal()?.companySlug).toBe("company-c");
+  });
+
+  it("GP-U14 storage failures are swallowed", () => {
+    const realSet = (g.localStorage as { setItem: unknown }).setItem;
+    (g.localStorage as { setItem: unknown }).setItem = () => { throw new Error("QuotaExceededError"); };
+    expect(() => saveLocal(reportFor("x"), "k")).not.toThrow();
+    (g.localStorage as { setItem: unknown }).setItem = realSet;
+    store[storageKey()] = "{not json";
+    expect(loadLocal()).toBeNull();
   });
 });

@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { getCompanyHeaders } from "@/components/CompanySelector";
-import { getEnvironmentHeaders } from "@/components/EnvironmentSelector";
-import { summarize } from "@/src/gp/evaluate";
+import { getCompanyHeaders, getCompanyOverride } from "@/components/CompanySelector";
+import { getEnvironmentHeaders, getSelectedEnv } from "@/components/EnvironmentSelector";
+import { normalizeReport, summarize } from "@/src/gp/evaluate";
 import { GP_BASELINE_SOURCE } from "@/data/gp-capability-baseline";
 import type {
   CountryCapability,
@@ -26,6 +26,38 @@ export interface GPState {
   fromLastRun: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Last run lives in this browser only, one per environment + company.
+// Nothing is stored on the server, so no company or entity IDs leave the browser,
+// and you never see a run someone else made against a different company.
+// ---------------------------------------------------------------------------
+
+const LS_PREFIX = "bhr_gp_last_run";
+
+export function storageKey(): string {
+  const env = getSelectedEnv();
+  const company = getCompanyOverride(env)?.companySlug || "none";
+  return `${LS_PREFIX}__${env}__${company}`;
+}
+
+export function saveLocal(report: GPRunReport, key: string) {
+  try {
+    localStorage.setItem(key, JSON.stringify(report));
+  } catch {
+    // Storage full, blocked or unavailable: the run still shows, it just won't survive a reload
+  }
+}
+
+export function loadLocal(): GPRunReport | null {
+  try {
+    const raw = localStorage.getItem(storageKey());
+    const report = raw ? (JSON.parse(raw) as GPRunReport) : null;
+    return report?.countries ? normalizeReport(report) : null;
+  } catch {
+    return null;
+  }
+}
+
 const initial: GPState = {
   running: false,
   status: "Ready",
@@ -42,6 +74,8 @@ const initial: GPState = {
 export function useGPCapabilities() {
   const [state, setState] = useState<GPState>(initial);
   const abortRef = useRef<AbortController | null>(null);
+  // Storage key for the run in progress, fixed when it starts (the company could change mid-run)
+  const runKeyRef = useRef<string | null>(null);
 
   const handleEvent = useCallback((event: string, data: Record<string, unknown>) => {
     switch (event) {
@@ -78,6 +112,7 @@ export function useGPCapabilities() {
       }
       case "gp:end": {
         const report = data as unknown as GPRunReport;
+        if (runKeyRef.current) saveLocal(report, runKeyRef.current);
         setState((s) => ({
           ...s,
           report,
@@ -104,6 +139,7 @@ export function useGPCapabilities() {
     abortRef.current?.abort();
     const abort = new AbortController();
     abortRef.current = abort;
+    runKeyRef.current = storageKey();
 
     setState((s) => ({
       ...initial,
@@ -162,13 +198,10 @@ export function useGPCapabilities() {
 
   const cancel = useCallback(() => abortRef.current?.abort(), []);
 
-  const loadLastRun = useCallback(async () => {
-    try {
-      const res = await fetch("/api/gp/capabilities/last-run");
-      if (!res.ok) return;
-      const report = (await res.json()) as GPRunReport;
-      if (!report?.countries) return;
-      setState((s) => (s.running ? s : {
+  const loadLastRun = useCallback(() => {
+    const report = loadLocal();
+    if (!report) return;
+    setState((s) => (s.running ? s : {
         ...s,
         report,
         fromLastRun: true,
@@ -178,11 +211,8 @@ export function useGPCapabilities() {
         entitiesError: report.entitiesError,
         queue: report.countries.map((c) => ({ code: c.code, name: c.name })),
         results: new Map(report.countries.map((c) => [c.code, c])),
-        status: `Last run ${new Date(report.timestamp).toLocaleString()} (${report.gatewayEnv}${report.companySlug ? ` · ${report.companySlug}` : ""})`,
-      }));
-    } catch {
-      // No previous run
-    }
+        status: `Last run ${new Date(report.timestamp).toLocaleString()}`,
+    }));
   }, []);
 
   /** The final report, or a partial one built from the results so far (for exporting a cancelled run) */

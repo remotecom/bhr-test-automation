@@ -98,7 +98,7 @@ export default function MainPage() {
           {activeTab === "playground" && (
             <PlaygroundView countries={countries} contractors={contractors} onEntityChange={setCurrentEntityName} />
           )}
-          {activeTab === "payroll" && <PayrollView />}
+          {activeTab === "payroll" && <PayrollView key={`${gatewayEnv}-${companyVersion}`} />}
           {LIFECYCLE_ENABLED && activeTab === "lifecycle" && <LifecycleView />}
         </>
       )}

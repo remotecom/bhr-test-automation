@@ -56,7 +56,8 @@ The verdict for each country is one of:
   - Baseline countries plus the company's entity countries (the default)
   - All catalog countries
   - A custom list of countries
-- **Export:** choose Markdown (for Notion), Test cases CSV (Testing Guide columns), Matrix CSV or JSON. `GET /api/gp/capabilities/export?format=md|test-cases|matrix|json` serves the last saved run.
+- **Export:** choose Markdown (for Notion), Test cases CSV (Testing Guide columns), Matrix CSV or JSON.
+- **Last run:** kept in your browser only, one per environment and company. Nothing is stored on the server, so company and entity IDs never leave your browser, and you only ever see runs against the company you're connected to. To share a run, use an export.
 - **CLI / CI:** run `npm run gp:capabilities -- --countries GBR,DEU --env partners --out data/gp-reports --strict`. It uses the `.env` credentials. Set `COMPANY_SLUG` and `REFRESH_TOKEN` as well if you want the entity column filled in.
 - **Unit tests:** `npm run test:gp-unit` makes no network calls.
 
@@ -78,9 +79,8 @@ src/gp/schema-analysis.ts             Required / hidden / inert-required analysi
 src/gp/evaluate.ts                    Coverage, entity status, baseline verdicts (pure)
 src/gp/capability-runner.ts           Orchestration + SSE events
 src/gp/export.ts                      CSV / Markdown builders (pure)
-src/gp/store.ts                       Last-run persistence (Vercel Blob → data/ fallback)
 src/gp/cli.ts                         CLI / CI entry point
-app/api/gp/capabilities/{run,last-run,export}/route.ts
+app/api/gp/capabilities/run/route.ts   SSE run endpoint (stores nothing)
 hooks/useGPCapabilities.ts
 components/payroll/PayrollView.tsx
 tests/gp-capabilities.unit.test.ts

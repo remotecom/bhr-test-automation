@@ -4,13 +4,13 @@
  * Body (optional): { scope?: "baseline" | "all" | "custom", countryCodes?: string[] }
  * Headers: X-Company-Slug, X-Refresh-Token, X-Gateway-Env (same as the suite)
  *
- * Read-only: probes global_payroll_* form schemas and lists legal entities. Creates nothing.
+ * Read-only: probes global_payroll_* form schemas and lists legal entities. Creates nothing,
+ * and stores nothing on the server; the browser keeps the last report.
  */
 
 import { readRequestOverrides, requireCompany } from "@/src/client";
 import { runGPCapabilities } from "@/src/gp/capability-runner";
-import { saveGPReport } from "@/src/gp/store";
-import type { GPRunReport, GPScope } from "@/src/gp/types";
+import type { GPScope } from "@/src/gp/types";
 
 export const maxDuration = 300;
 
@@ -60,10 +60,8 @@ export async function POST(request: Request) {
       };
 
       runGPCapabilities(
-        (event, data) => {
-          send(event, data);
-          if (event === "gp:end") void saveGPReport(data as GPRunReport);
-        },
+        // Nothing is stored on the server: the browser keeps the finished report (see hooks/useGPCapabilities.ts)
+        (event, data) => send(event, data),
         { signal: abort.signal, companySlug: gate.slug, refreshToken: gate.refreshToken, gatewayEnv, scope, countryCodes }
       )
         .then(() => send("gp:process-done", { exitCode: abort.signal.aborted ? 130 : 0 }))
