@@ -86,7 +86,7 @@ These projects are always in context — consider cross-repo implications for an
 
 ## Environment Setup
 
-If you use `remote.sh` (`~/.remote_creds` and `~/.remote_companies_{partners,sandbox}`), run `npm run env:sync` to fill `.env` from those files, and `npm run env:check` to check every credential against the API without changing anything. Both are in `scripts/env-sync.mjs`. It parses the files and never executes them, never prints secrets, backs up to `.env.bak`, and keeps company refresh tokens local-only.
+`npm run env:sync` creates `.env` from `.env.example`, generates `JWT_SECRET`, and checks every credential against both gateways; `npm run env:check` only checks (`scripts/env-sync.mjs`). remote.sh is optional: if `~/.remote_creds` / `~/.remote_companies_{partners,sandbox}` exist, env:sync also imports from them (parsed, never executed). It never prints secrets, backs up to `.env.bak`, and keeps company refresh tokens local-only.
 
 Required in `.env` for the deployed app (see `.env.example` for details):
 - `CLIENT_ID`, `CLIENT_SECRET` — Partner API OAuth client (Partners sandbox)

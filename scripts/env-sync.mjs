@@ -1,8 +1,16 @@
 #!/usr/bin/env node
 /**
- * env-sync: fill .env from your remote.sh files.
+ * env-sync: set up .env and check it. remote.sh is optional.
  *
- *   npm run env:sync                       # sync, then check every credential against the API
+ * For everyone:
+ *   - creates .env from .env.example if it doesn't exist
+ *   - generates JWT_SECRET if it's missing
+ *   - checks each credential in .env against both gateways (read-only)
+ *
+ * If you also use remote.sh, it copies your client credentials and saved companies across,
+ * so you don't have to paste them. Without remote.sh, fill in .env by hand; the rest still works.
+ *
+ *   npm run env:sync                       # set up / sync, then check every credential
  *   npm run env:sync -- --partners ACME --sandbox GP_HARNESS   # pick saved companies by label
  *   npm run env:sync -- --no-companies     # client credentials only (deployed-app setup)
  *   npm run env:sync -- --dry-run          # show what would change, write nothing
@@ -331,14 +339,18 @@ async function main() {
   }
   const current = parseDotenv(envText);
 
+  // remote.sh is optional: use its files only if they exist
   const credsText = readIfExists(CREDS_FILE);
-  if (credsText === null) {
-    throw new Error(`${CREDS_FILE} not found. Set up remote.sh first (see the Notion page "remote.sh: Remote API toolkit"), or set REMOTE_CREDS_FILE.`);
-  }
-  const creds = parseShellExports(credsText);
+  const hasCompanyFiles = Object.values(COMPANIES_FILE).some((f) => fs.existsSync(f));
+  const usingRemoteSh = credsText !== null || hasCompanyFiles;
+  const creds = credsText ? parseShellExports(credsText) : new Map();
 
   const updates = {};
   const summary = [];
+
+  if (!usingRemoteSh) {
+    summary.push(c.dim("remote.sh not set up (optional): nothing to import, using .env as it is"));
+  }
 
   for (const env of ["partners", "sandbox"]) {
     const ek = ENV_KEYS[env];
@@ -348,12 +360,12 @@ async function main() {
     if (!isPlaceholder(id) && !isPlaceholder(secret)) {
       updates[ek.id] = id;
       updates[ek.secret] = secret;
-      summary.push(`${env}: client credentials from ${ck.id}/${ck.secret} (${mask(id)})`);
-    } else {
-      summary.push(c.warn(`${env}: ${ck.id}/${ck.secret} missing in ${CREDS_FILE}; left .env unchanged`));
+      summary.push(`${env}: client credentials from remote.sh ${ck.id}/${ck.secret} (${mask(id)})`);
+    } else if (isPlaceholder(current.get(ek.id)) || isPlaceholder(current.get(ek.secret))) {
+      summary.push(c.warn(`${env}: fill in ${ek.id} and ${ek.secret} in .env`));
     }
 
-    if (!NO_COMPANIES) {
+    if (!NO_COMPANIES && usingRemoteSh) {
       const companies = loadCompanies(env);
       const pick = await chooseCompany(env, companies, current.get(ek.company));
       if (pick) {
@@ -361,7 +373,7 @@ async function main() {
         updates[ek.refresh] = pick.refresh;
         summary.push(`${env}: company ${pick.label} ${c.dim(pick.id)}`);
       } else {
-        summary.push(c.dim(`${env}: no saved companies in ${COMPANIES_FILE[env]} (create one with create_company)`));
+        summary.push(c.dim(`${env}: no saved remote.sh companies (optional; only npm test and the GP CLI use one)`));
       }
     }
   }
@@ -382,7 +394,7 @@ async function main() {
 
   const { text, changes } = applyToEnvText(envText, updates);
 
-  console.log("\nSources:");
+  console.log("\nSetup:");
   summary.forEach((s) => console.log(`  ${s}`));
   console.log("\nChanges to .env:");
   if (changes.length === 0) console.log(c.dim("  none: .env is already in sync"));
@@ -391,13 +403,14 @@ async function main() {
   if (DRY_RUN) {
     console.log(c.dim("\n--dry-run: nothing written"));
   } else if (changes.length > 0) {
-    if (fs.existsSync(ENV_PATH)) {
+    const hadEnv = fs.existsSync(ENV_PATH);
+    if (hadEnv) {
       fs.copyFileSync(ENV_PATH, `${ENV_PATH}.bak`);
       fs.chmodSync(`${ENV_PATH}.bak`, 0o600);
     }
     fs.writeFileSync(ENV_PATH, text, { mode: 0o600 });
     fs.chmodSync(ENV_PATH, 0o600);
-    console.log(c.dim(`\nWrote .env (previous copy in .env.bak)`));
+    console.log(c.dim(hadEnv ? "\nWrote .env (previous copy in .env.bak)" : "\nCreated .env"));
   }
 
   if (!NO_CHECK) {

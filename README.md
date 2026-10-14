@@ -4,52 +4,45 @@ Explore contractor product availability (CM, CM+, COR) across countries, legal e
 
 ## Prerequisites
 
-- Node.js 18+
-- npm
-- Remote partner API credentials (client ID, client secret, refresh token)
+- Node.js 18+ and npm
+- Remote Partner API client credentials (client ID and secret) for the partners sandbox and/or the Remote sandbox
 
 ## Setup
 
 ```bash
-# Install dependencies
 npm install
-
-# Copy environment template and fill in your credentials
-cp .env.example .env
+npm run env:sync      # creates .env from .env.example and generates JWT_SECRET
 ```
 
-Edit `.env` with your credentials from the Remote partner dashboard:
+Then fill in `.env`:
 
-| Variable | Where to find it |
-|----------|-----------------|
-| `CLIENT_ID` | Partner Dashboard → Settings → API Credentials |
-| `CLIENT_SECRET` | Partner Dashboard → Settings → API Credentials |
-| `REFRESH_TOKEN` | Partner Dashboard → Settings → API Credentials |
-| `COMPANY_SLUG` | Partner Dashboard → Companies → click company → UUID in URL |
-| `GATEWAY_URL` | Use `https://gateway.partners.remote-sandbox.com` for sandbox |
+| Variable | What it is |
+|----------|-----------|
+| `CLIENT_ID`, `CLIENT_SECRET` | Client credentials for the partners sandbox |
+| `SANDBOX_CLIENT_ID`, `SANDBOX_CLIENT_SECRET` | Client credentials for the Remote sandbox |
+| `AUTH_PASSWORD` | Password for the dashboard login page |
 
-### Faster setup with remote.sh
+Run `npm run env:check` to test every credential against both gateways (read-only). It tells you which one fails and why.
 
-If you already use `remote.sh` (the Remote API toolkit on Notion), skip the manual steps:
+**Companies:** the dashboard doesn't need one in `.env`. Open the company selector in the header and click **Create Fresh Company**, or paste a refresh token. `COMPANY_SLUG` / `REFRESH_TOKEN` (and the `SANDBOX_` versions) are only used by `npm test` and the GP command-line report. Never add them to Vercel.
+
+### Optional: import from remote.sh
+
+If you already use `remote.sh` (the Remote API toolkit on Notion), `npm run env:sync` also copies your client credentials from `~/.remote_creds` and a saved company from `~/.remote_companies_partners` / `~/.remote_companies_sandbox`, so you don't paste anything:
 
 ```bash
-npm install
-npm run env:sync                                   # fills .env, then checks it against both gateways
-npm run env:sync -- --partners ACME --sandbox ACME # choose which saved companies to use
-npm run env:check                                  # re-check later without changing anything
+npm run env:sync -- --partners ACME --sandbox ACME   # choose which saved companies to use
 ```
 
-It reads `~/.remote_creds` (client credentials) and `~/.remote_companies_partners` / `~/.remote_companies_sandbox` (the companies `create_company` saved). It also generates `JWT_SECRET` if it's missing. Your other `.env` lines are kept, and the previous file is saved as `.env.bak`.
-
-Company refresh tokens are only used by `npm test` and the CLI. Never add them to Vercel: dashboard users connect their own company in the UI.
+It's not worth setting up remote.sh just for this app: filling in `.env` by hand is quicker. Your other `.env` lines are kept, and the previous file is saved as `.env.bak`.
 
 ## Run
 
 ```bash
-npm start
+npm run dev           # dashboard at http://localhost:3000
 ```
 
-Opens the dashboard at `http://localhost:3939`.
+`npm start` runs the older local dashboard on port 3939, which has its own copy of the test cases.
 
 ## Tabs
 
