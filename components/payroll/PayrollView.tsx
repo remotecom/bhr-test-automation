@@ -243,7 +243,7 @@ export default function PayrollView() {
     : entitiesError ? "not checked" : "no entities";
 
   return (
-    <div className="suite-view">
+    <div className="suite-view gp-view">
       {/* Toolbar */}
       <div className="suite-toolbar">
         {running ? (
@@ -335,14 +335,22 @@ export default function PayrollView() {
           <>
             {view !== "none" && (
               <table className="gp-table">
+                <colgroup>
+                  <col className="gp-w-country" />
+                  <col className="gp-w-cov" />
+                  <col className="gp-w-employer" />
+                  <col className="gp-w-employee" />
+                  <col className="gp-w-notes gp-hide-sm" />
+                  <col className="gp-w-entity gp-hide-md" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th className="gp-col-country">Country</th>
                     <th className="gp-col-cov">Coverage</th>
-                    <th className="gp-col-forms">Employer forms</th>
-                    <th className="gp-col-forms">Employee forms</th>
-                    <th className="gp-col-notes">Notes</th>
-                    <th className="gp-col-entity">Your entity</th>
+                    <th className="gp-col-forms">Employer</th>
+                    <th className="gp-col-forms">Employee</th>
+                    <th className="gp-col-notes gp-hide-sm">Notes</th>
+                    <th className="gp-col-entity gp-hide-md">Entity</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -356,13 +364,14 @@ export default function PayrollView() {
                         <tr className={`gp-row ${needsAttention(c) ? "gp-row-attention" : ""}`} onClick={() => toggle(c.code)}>
                           <td className="gp-col-country">
                             <span className="gp-caret">{open ? "▾" : "▸"}</span>
-                            <span className="gp-code">{c.code}</span> <span className="gp-name">{c.name}</span>
+                            <span className="gp-code">{c.code}</span> <span className="gp-name" title={c.name}>{c.name}</span>
+                            <div className="gp-notes-inline"><Notes c={c} /></div>
                           </td>
                           <td className="gp-col-cov"><CoveragePill c={c} /></td>
                           <td className="gp-col-forms">{EMPLOYER_FORMS.map((f) => <FormPill key={f.key} def={f} p={c.forms[f.key]} />)}</td>
                           <td className="gp-col-forms">{EMPLOYEE_FORMS.map((f) => <FormPill key={f.key} def={f} p={c.forms[f.key]} />)}</td>
-                          <td className="gp-col-notes"><Notes c={c} /></td>
-                          <td className="gp-col-entity"><EntityCell c={c} /></td>
+                          <td className="gp-col-notes gp-hide-sm"><Notes c={c} /></td>
+                          <td className="gp-col-entity gp-hide-md"><EntityCell c={c} /></td>
                         </tr>
                         {open && (
                           <tr className="gp-detail-row"><td colSpan={6}><Detail c={c} /></td></tr>

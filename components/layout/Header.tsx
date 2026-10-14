@@ -45,6 +45,8 @@ export default function Header({ status, activeTab, onTabChange, currentEntityNa
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
+        flexWrap: "wrap",
+        gap: "8px 16px",
         padding: "12px 20px",
         background: "#161b22",
         borderBottom: "1px solid #30363d",
@@ -75,7 +77,7 @@ export default function Header({ status, activeTab, onTabChange, currentEntityNa
         ))}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px 12px" }}>
         <EnvironmentSelector onEnvironmentChange={onEnvironmentChange} />
         <CompanySelector onCompanyChange={onCompanyChange} gatewayEnv={gatewayEnv} />
         {currentEntityName ? (
