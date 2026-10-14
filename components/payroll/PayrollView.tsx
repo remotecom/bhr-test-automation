@@ -60,7 +60,7 @@ function FormPill({ def, p }: { def: GPFormDef; p?: FormProbe }) {
       const inert = p.analysis?.inertRequired.length || 0;
       return (
         <span
-          className={`gp-pill gp-pill-on ${inert ? "gp-pill-flag" : ""}`}
+          className="gp-pill gp-pill-on"
           title={`${base}\nPublished: ${p.analysis?.requiredFields.length ?? 0} required of ${p.analysis?.fieldCount ?? 0} fields${inert ? `\nSkips ${p.analysis!.inertRequired.join(", ")}, which the API may still require` : ""}`}
         >
           {def.short}
@@ -69,7 +69,7 @@ function FormPill({ def, p }: { def: GPFormDef; p?: FormProbe }) {
     }
     case "requires_employment":
       return (
-        <span className="gp-pill gp-pill-on gp-pill-gated" title={`${base}\nPublished. The schema can only be read for a specific employment (employment_id).`}>
+        <span className="gp-pill gp-pill-on" title={`${base}\nPublished. The schema can only be read for a specific employment (employment_id).`}>
           {def.short}
         </span>
       );
@@ -335,15 +335,6 @@ export default function PayrollView() {
         </div>
       </div>
 
-      {/* Legend: always visible, one line */}
-      <div className="gp-legend">
-        <span className="gp-legend-item"><span className="gp-pill gp-pill-on">Form</span> published</span>
-        <span className="gp-legend-item"><span className="gp-pill gp-pill-on gp-pill-gated">Form</span> published, needs an employment to read</span>
-        <span className="gp-legend-item"><span className="gp-pill gp-pill-off">Form</span> not available</span>
-        <span className="gp-legend-item"><span className="gp-pill gp-pill-on gp-pill-flag">Form</span> skips a field the API may require</span>
-        <span className="gp-legend-item"><span className="gp-pill gp-pill-err">Form</span> error</span>
-        <span className="gp-legend-item gp-muted" title={`Baseline: ${GP_BASELINE_SOURCE}`}>Red only when a country differs from the baseline or the check fails</span>
-      </div>
 
       <div className="table-wrap">
         {all.length === 0 ? (
@@ -358,8 +349,8 @@ export default function PayrollView() {
                   <tr>
                     <th className="gp-col-country gp-w-country">Country</th>
                     <th className="gp-col-cov gp-w-cov">Coverage</th>
-                    <th className="gp-col-forms gp-w-employer">Employer</th>
-                    <th className="gp-col-forms gp-w-employee">Employee</th>
+                    <th className="gp-col-forms gp-w-employer" title="Forms the employer completes. Green: published for this country. Struck through: not available. Red: the check failed.">Employer forms</th>
+                    <th className="gp-col-forms gp-w-employee" title="Forms the employee completes. Green: published for this country. Struck through: not available. Red: the check failed.">Employee forms</th>
                     <th className="gp-col-notes gp-w-notes gp-hide-sm">Notes</th>
                     <th className="gp-col-entity gp-w-entity gp-hide-md" title="GP status of the connected test company's entity in this country">Test company</th>
                   </tr>
