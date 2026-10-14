@@ -10,6 +10,7 @@ import PayrollView from "@/components/payroll/PayrollView";
 import ConnectCompanyBanner from "@/components/ConnectCompanyBanner";
 import { getCompanyHeaders, getCompanyOverride } from "@/components/CompanySelector";
 import { getEnvironmentHeaders, getSelectedEnv } from "@/components/EnvironmentSelector";
+import { SHOW_CM } from "@/lib/features";
 
 type Tab = "suite" | "playground" | "payroll" | "lifecycle";
 
@@ -21,7 +22,7 @@ interface Country {
 }
 
 export default function MainPage() {
-  const [activeTab, setActiveTab] = useState<Tab>("suite");
+  const [activeTab, setActiveTab] = useState<Tab>(SHOW_CM ? "suite" : "payroll");
   const [status, setStatus] = useState<{
     name?: string;
     connected: boolean;
@@ -65,6 +66,9 @@ export default function MainPage() {
       })
       .catch(() => setStatus({ connected: false, error: "Connection failed" }));
 
+    // Countries and contractor fixtures are only used by the CM Playground
+    if (!SHOW_CM) return;
+
     fetch("/api/countries", { headers })
       .then((r) => r.json())
       .then((data) => setCountries(data.data || []))
@@ -94,8 +98,8 @@ export default function MainPage() {
         <ConnectCompanyBanner />
       ) : (
         <>
-          {activeTab === "suite" && <SuiteView />}
-          {activeTab === "playground" && (
+          {SHOW_CM && activeTab === "suite" && <SuiteView />}
+          {SHOW_CM && activeTab === "playground" && (
             <PlaygroundView countries={countries} contractors={contractors} onEntityChange={setCurrentEntityName} />
           )}
           {activeTab === "payroll" && <PayrollView key={`${gatewayEnv}-${companyVersion}`} />}

@@ -54,6 +54,7 @@ Tests exercise a 5-stage product funnel that narrows available products:
 - **`app/api/playground/run/route.ts`** — Single scenario SSE endpoint (maxDuration 60s).
 - **`hooks/useSuite.ts` / `usePlayground.ts`** — SSE streaming state management hooks.
 - **`middleware.ts`** — JWT auth on all routes except `/login`.
+- **`lib/features.ts`** — Feature toggles. `NEXT_PUBLIC_SHOW_CM=false` hides Test Suite and Playground so only the Payroll (GP) tab shows (build-time; redeploy after changing). `LIFECYCLE_ENABLED` in `Header.tsx` hides Lifecycle.
 
 ### Global Payroll (GP) capability report
 
