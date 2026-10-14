@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .env
+.env.bak
 *.log
 data/last-run.json
 data/mega-run.json

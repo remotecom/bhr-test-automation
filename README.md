@@ -28,6 +28,21 @@ Edit `.env` with your credentials from the Remote partner dashboard:
 | `COMPANY_SLUG` | Partner Dashboard → Companies → click company → UUID in URL |
 | `GATEWAY_URL` | Use `https://gateway.partners.remote-sandbox.com` for sandbox |
 
+### Faster setup with remote.sh
+
+If you already use `remote.sh` (the Remote API toolkit on Notion), skip the manual steps:
+
+```bash
+npm install
+npm run env:sync                                   # fills .env, then checks it against both gateways
+npm run env:sync -- --partners ACME --sandbox ACME # choose which saved companies to use
+npm run env:check                                  # re-check later without changing anything
+```
+
+It reads `~/.remote_creds` (client credentials) and `~/.remote_companies_partners` / `~/.remote_companies_sandbox` (the companies `create_company` saved). It also generates `JWT_SECRET` if it's missing. Your other `.env` lines are kept, and the previous file is saved as `.env.bak`.
+
+Company refresh tokens are only used by `npm test` and the CLI. Never add them to Vercel: dashboard users connect their own company in the UI.
+
 ## Run
 
 ```bash
