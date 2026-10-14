@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A Next.js 16 test automation platform for validating contractor onboarding flows against the Remote Partner API. It combines a web dashboard (React 19 + SSE streaming), API routes, and Vitest-based integration tests that hit a real sandbox API.
+**Remote API Test Lab** (repo: `bhr-test-automation`). A Next.js 16 test automation platform for validating contractor onboarding flows and Global Payroll coverage against the Remote Partner API. It combines a web dashboard (React 19 + SSE streaming), API routes, and Vitest-based integration tests that hit a real sandbox API.
 
 ## Commands
 
@@ -49,7 +49,7 @@ Tests exercise a 5-stage product funnel that narrows available products:
 
 ### Web Dashboard
 
-- **`app/page.tsx`** — Two-tab dashboard: Suite (full test run) and Playground (single scenario explorer).
+- **`app/page.tsx`** — Dashboard tabs: Test Suite (full test run), Playground (single scenario explorer) and Payroll (GP coverage report).
 - **`app/api/suite/run/route.ts`** — SSE streaming endpoint, runs test matrix in-process (maxDuration 300s).
 - **`app/api/playground/run/route.ts`** — Single scenario SSE endpoint (maxDuration 60s).
 - **`hooks/useSuite.ts` / `usePlayground.ts`** — SSE streaming state management hooks.

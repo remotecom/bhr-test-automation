@@ -1,7 +1,7 @@
 {
-  "name": "test-contractor-demo-app",
+  "name": "remote-api-test-lab",
   "version": "1.0.0",
-  "description": "Test Contractor Demo App — explore contractor product availability across countries, entities, and products via Remote's partner API",
+  "description": "Remote API Test Lab: test Remote Partner API onboarding flows (contractor products and Global Payroll) against the sandboxes",
   "type": "module",
   "scripts": {
     "test": "vitest run",

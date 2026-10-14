@@ -58,7 +58,7 @@ export default function Header({ status, activeTab, onTabChange, currentEntityNa
       }}
     >
       <h1 style={{ fontSize: "15px", fontWeight: 600, color: "#58a6ff" }}>
-        {SHOW_CM ? "Test Contractor Demo App" : "Global Payroll Test App"}
+        Remote API Test Lab
       </h1>
 
       <div style={{ display: "flex", gap: "4px" }}>

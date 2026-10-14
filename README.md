@@ -1,6 +1,11 @@
-# Test Contractor Demo App
+# Remote API Test Lab
 
-Explore contractor product availability (CM, CM+, COR) across countries, legal entities, and products using Remote's partner API. Run onboarding scenarios interactively without writing code.
+Test Remote Partner API onboarding flows against the sandboxes, without writing code:
+
+- **Contractors (CM, CM+, COR):** run product-availability scenarios across countries and legal entities (Test Suite, Playground).
+- **Global Payroll:** see which GP onboarding forms each country publishes, compared against known coverage (Payroll tab). See `docs/gp-capabilities.md`.
+
+The repo is still called `bhr-test-automation`; it started as BambooHR test automation for the CM launch.
 
 ## Prerequisites
 

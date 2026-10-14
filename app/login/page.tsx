@@ -41,7 +41,7 @@ export default function LoginPage() {
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
       >
         <h1 className="text-lg font-semibold mb-1" style={{ color: "var(--accent)" }}>
-          Test Contractor Demo App
+          Remote API Test Lab
         </h1>
         <p className="text-xs mb-6" style={{ color: "var(--muted)" }}>
           Enter password to access the playground
