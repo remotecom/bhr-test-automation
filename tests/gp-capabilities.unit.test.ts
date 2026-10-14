@@ -165,6 +165,6 @@ describe("GP export", () => {
     expect(toMatrixCSV(report).split("\n")[1]).toContain("GBR,United Kingdom");
     const md = toMarkdown(report);
     expect(md).toContain("| GBR | United Kingdom | Full (employer + employee) |");
-    expect(md).toContain("inert-required");
+    expect(md).toContain("Fields the form skips");
   });
 });

@@ -29,8 +29,12 @@ const EMPLOYEE_FORMS = GP_FORMS.filter((f) => f.side === "employee");
 const needsAttention = (c: CountryCapability) =>
   c.baseline.verdict === "drift" || c.baseline.verdict === "error" || c.coverage === "unknown";
 const isPartial = (c: CountryCapability) => c.coverage === "employer_only" || c.coverage === "employee_only";
-const hasInert = (c: CountryCapability) =>
-  GP_FORMS.some((f) => (c.forms[f.key]?.analysis?.inertRequired.length || 0) > 0);
+/** Fields a form never asks for, although its schema lists them as required under a switched-off rule */
+const skippedFields = (c: CountryCapability) =>
+  GP_FORMS.flatMap((f) => c.forms[f.key]?.analysis?.inertRequired || []);
+const SKIP_EXPLAIN =
+  "The form never asks for these fields, but its schema still lists them as required under a rule that is switched off. " +
+  "If the API still requires them, submitting the form fails with a 422 (this happened with UK overtime_eligible). Not tested yet.";
 
 function download(content: string, filename: string, type: string) {
   const blob = new Blob([content], { type: `${type};charset=utf-8` });
@@ -57,7 +61,7 @@ function FormPill({ def, p }: { def: GPFormDef; p?: FormProbe }) {
       return (
         <span
           className={`gp-pill gp-pill-on ${inert ? "gp-pill-flag" : ""}`}
-          title={`${base}\nPublished: ${p.analysis?.requiredFields.length ?? 0} required of ${p.analysis?.fieldCount ?? 0} fields${inert ? `\n${inert} inert-required field(s)` : ""}`}
+          title={`${base}\nPublished: ${p.analysis?.requiredFields.length ?? 0} required of ${p.analysis?.fieldCount ?? 0} fields${inert ? `\nSkips ${p.analysis!.inertRequired.join(", ")}, which the API may still require` : ""}`}
         >
           {def.short}
         </span>
@@ -106,7 +110,16 @@ function Notes({ c }: { c: CountryCapability }) {
   }
   if (c.baseline.verdict === "error" || c.coverage === "unknown") items.push(<span key="err" className="gp-note-bad">Probe error</span>);
   if (c.nameRequired === false) items.push(<span key="name" className="gp-note">name optional</span>);
-  if (hasInert(c)) items.push(<span key="inert" className="gp-note-warn">hidden required field</span>);
+  const skipped = skippedFields(c);
+  if (skipped.length) {
+    const names = skipped.join(", ");
+    const shown = names.length <= 24 ? names : `${skipped.length} field${skipped.length > 1 ? "s" : ""}`;
+    items.push(
+      <span key="skip" className="gp-note-warn" title={`${skipped.join(", ")}\n\n${SKIP_EXPLAIN}`}>
+        Form skips {shown}: may be required
+      </span>
+    );
+  }
   return <>{items.reduce<React.ReactNode[]>((acc, n, i) => (i ? [...acc, <span key={`s${i}`} className="gp-dot-sep"> · </span>, n] : [n]), [])}</>;
 }
 
@@ -150,7 +163,8 @@ function Detail({ c }: { c: CountryCapability }) {
                 <>
                   <FieldList label="required" fields={p.analysis.requiredFields} />
                   <FieldList label="hidden" fields={p.analysis.hiddenFields} />
-                  <FieldList label="inert-required (if: false)" fields={p.analysis.inertRequired} />
+                  <FieldList label="skipped by the form, may still be required" fields={p.analysis.inertRequired} />
+                  {p.analysis.inertRequired.length > 0 && <div className="gp-fields gp-muted">{SKIP_EXPLAIN}</div>}
                 </>
               )}
             </div>
@@ -319,7 +333,7 @@ export default function PayrollView() {
             <span className="gp-pill gp-pill-on">Form</span> published ·{" "}
             <span className="gp-pill gp-pill-on gp-pill-gated">Form</span> published, schema needs an employment ·{" "}
             <span className="gp-pill gp-pill-off">Form</span> not available ·{" "}
-            <span className="gp-pill gp-pill-on gp-pill-flag">Form</span> has a hidden required field ·{" "}
+            <span className="gp-pill gp-pill-on gp-pill-flag">Form</span> skips a field the API may still require ·{" "}
             <span className="gp-pill gp-pill-err">Form</span> probe error
           </div>
           <div>Baseline: {GP_BASELINE_SOURCE}. A country only turns red when it differs from the baseline or the probe fails.</div>
@@ -335,22 +349,14 @@ export default function PayrollView() {
           <>
             {view !== "none" && (
               <table className="gp-table">
-                <colgroup>
-                  <col className="gp-w-country" />
-                  <col className="gp-w-cov" />
-                  <col className="gp-w-employer" />
-                  <col className="gp-w-employee" />
-                  <col className="gp-w-notes gp-hide-sm" />
-                  <col className="gp-w-entity gp-hide-md" />
-                </colgroup>
                 <thead>
                   <tr>
-                    <th className="gp-col-country">Country</th>
-                    <th className="gp-col-cov">Coverage</th>
-                    <th className="gp-col-forms">Employer</th>
-                    <th className="gp-col-forms">Employee</th>
-                    <th className="gp-col-notes gp-hide-sm">Notes</th>
-                    <th className="gp-col-entity gp-hide-md">Entity</th>
+                    <th className="gp-col-country gp-w-country">Country</th>
+                    <th className="gp-col-cov gp-w-cov">Coverage</th>
+                    <th className="gp-col-forms gp-w-employer">Employer</th>
+                    <th className="gp-col-forms gp-w-employee">Employee</th>
+                    <th className="gp-col-notes gp-w-notes gp-hide-sm">Notes</th>
+                    <th className="gp-col-entity gp-w-entity gp-hide-md">Entity</th>
                   </tr>
                 </thead>
                 <tbody>

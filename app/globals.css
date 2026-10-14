@@ -348,7 +348,8 @@ a.gp-entity-on:hover, a.gp-entity-off:hover { text-decoration: underline; }
 /* Expanded detail */
 .gp-detail-row td { background: #0f141a; padding: 0; cursor: default; }
 .gp-detail { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 10px 16px 12px 34px; font-size: 11px; line-height: 1.7; }
-.gp-detail-col { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
+.gp-detail-col { flex: 1 1 240px; min-width: 0; }
+.gp-detail code { display: inline-block; max-width: 100%; overflow-wrap: anywhere; margin-bottom: 2px; }
 .gp-detail-wide { flex: 2 1 320px; }
 .gp-detail-title { color: #8b949e; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
 .gp-form-detail { margin-bottom: 6px; }
@@ -372,11 +373,13 @@ a.gp-entity-on:hover, a.gp-entity-off:hover { text-decoration: underline; }
 .gp-view .suite-toolbar { flex-wrap: wrap; row-gap: 6px; }
 .gp-view .suite-status { min-width: 0; overflow-wrap: anywhere; }
 .gp-exports { flex-wrap: wrap; }
+/* Hidden columns collapse to zero width rather than display:none, so the
+   colSpan of the expanded detail row still matches the real column count. */
 @media (max-width: 1100px) {
-  .gp-hide-md { display: none; }
+  .gp-table .gp-hide-md { width: 0 !important; padding: 0 !important; border: 0; visibility: hidden; overflow: hidden; white-space: nowrap; font-size: 0; }
 }
 @media (max-width: 820px) {
-  .gp-hide-sm { display: none; }
+  .gp-table .gp-hide-sm { width: 0 !important; padding: 0 !important; border: 0; visibility: hidden; overflow: hidden; white-space: nowrap; font-size: 0; }
   .gp-notes-inline { display: block; }
   .gp-col-country { white-space: normal; }
   .gp-w-country { width: 34%; }

@@ -27,9 +27,9 @@ The report creates nothing and changes no sandbox state, so it is safe to run ag
 
 - **required** fields: the top-level `required` list
 - **hidden** fields: `x-jsf-presentation.inputType: "hidden"`
-- **inert-required** fields: fields required only under `{ if: false, then: { required: [...] } }`
+- **skipped fields** (shown as "Form skips X: may be required"): fields the form never asks for, because the schema only requires them under a switched-off rule, `{ if: false, then: { required: [...] } }`
 
-The GBR `overtime_eligible` 422 (API-BEHAVIOUR-2, TASA-1667, fixed in PBYR-4962) followed this pattern: the form never asked for the field, but the backend still required it. Treat an inert-required field as something to check, not as a confirmed bug.
+The GBR `overtime_eligible` 422 (API-BEHAVIOUR-2, TASA-1667, fixed in PBYR-4962) followed this pattern: the form never asked for the field, but the backend still required it. A skipped field is something to check, not a confirmed bug. Only submitting the form without it for a real GP employment tells you whether the API enforces it (422) or not (200).
 
 ## Baseline
 

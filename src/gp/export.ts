@@ -98,7 +98,7 @@ export function toMatrixCSV(report: GPRunReport): string {
     "Code", "Country", "Region", "Coverage", "Company entity",
     ...GP_FORMS.map((f) => f.label),
     "Name required", "Contract required fields", "Personal required fields",
-    "Hidden fields", "Inert-required fields", "Catalog GP schemas",
+    "Hidden fields", "Skipped by form (may be required)", "Catalog GP schemas",
     "Baseline", "Baseline detail",
   ];
   const rows = report.countries.map((c) => {
@@ -136,7 +136,7 @@ export function toTestCaseRows(report: GPRunReport): string[][] {
       `Company: ${ENTITY_LABEL[c.entity.status]}`,
       c.nameRequired !== null ? `name required: ${c.nameRequired ? "yes" : "no"}` : "",
       hidden.length ? `Hidden: ${hidden.join(", ")}` : "",
-      inert.length ? `Inert-required (verify the backend does not enforce them): ${inert.join(", ")}` : "",
+      inert.length ? `Form skips ${inert.join(", ")}; the API may still require them (untested)` : "",
       c.baseline.note || "",
     ].filter(Boolean).join(" | ");
     return [
@@ -199,9 +199,9 @@ export function toMarkdown(report: GPRunReport): string {
     .filter((x) => x.inert.length > 0);
   if (signals.length) {
     lines.push("");
-    lines.push(`## Schema signals: inert-required fields`);
+    lines.push(`## Fields the form skips that the API may still require`);
     lines.push("");
-    lines.push(`These fields are required only under an \`if: false\` rule, so a client following the schema will never send them. If the backend still enforces them, the submission fails with a 422 (this happened with GBR \`overtime_eligible\`).`);
+    lines.push(`The form never asks for these fields, but its schema still lists them as required under a rule that is switched off. If the API still requires them, submitting the form fails with a 422 (this happened with UK \`overtime_eligible\`). Not tested yet.`);
     lines.push("");
     for (const x of signals) lines.push(`- **${x.c.code}**: ${x.inert.map((f) => `\`${f}\``).join(", ")}`);
   }
