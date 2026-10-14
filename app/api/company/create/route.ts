@@ -31,7 +31,8 @@ export async function POST(request: Request) {
     if (createRes.status >= 400) {
       // Surface the API's reason (e.g. "not allowed to use the `get_oauth_access_tokens` action")
       const d = createRes.data as unknown as { message?: string; errors?: unknown } | null;
-      const reason = d?.message || (d?.errors ? JSON.stringify(d.errors) : "");
+      // Include both: the message can be generic ("Unprocessable Entity") while errors names the field
+      const reason = [d?.message, d?.errors ? JSON.stringify(d.errors) : ""].filter(Boolean).join(" ");
       return Response.json(
         { error: `Company creation failed (${createRes.status})${reason ? `: ${reason}` : ""}`, details: createRes.data },
         { status: createRes.status }
