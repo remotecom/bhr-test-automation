@@ -68,6 +68,17 @@ export async function probeGPForm(
         };
       }
 
+      // Remote sandbox: contract details needs an employment. Only published forms get this far
+      // (unsupported countries return 422 before the parameter check), so treat it as published.
+      const msg = extractMessage(data) || "";
+      if (status === 400 && /employment_id/i.test(msg) && !opts.employmentId) {
+        return {
+          form, status: "requires_employment", httpStatus: status,
+          message: "Published; schema only readable with an employment_id",
+          durationMs: Date.now() - started,
+        };
+      }
+
       if (status === 422 || status === 404) {
         return {
           form, status: "unavailable", httpStatus: status,

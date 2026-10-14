@@ -14,3 +14,10 @@ tsconfig.tsbuildinfo
 .vercel
 .env*.local
 app/local/
+
+# remote.sh output files (contain tokens / test data)
+company_*.json
+emp_*.json
+cd_*.json
+schema_*.json
+contract_details_usa.json

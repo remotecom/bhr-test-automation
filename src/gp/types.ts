@@ -6,8 +6,17 @@ import type { GPFormKey } from "../../data/gp-capability-baseline";
 
 export type { GPFormKey };
 
-/** available = 200 with a schema, unavailable = 404/422 "Form not available", error = anything else */
-export type ProbeStatus = "available" | "unavailable" | "error" | "skipped";
+/**
+ * available           = 200 with a schema
+ * requires_employment = 400 "missing required query parameter: employment_id". The form is published
+ *                       for the country (unsupported countries get 422 first), but its schema can only
+ *                       be read for a specific employment. Counts as published.
+ * unavailable         = 404/422 "Form not available"
+ * error               = anything else
+ */
+export type ProbeStatus = "available" | "requires_employment" | "unavailable" | "error" | "skipped";
+
+export const isPublished = (s?: ProbeStatus) => s === "available" || s === "requires_employment";
 
 export interface SchemaAnalysis {
   /** Top-level property count */

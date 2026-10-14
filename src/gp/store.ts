@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { head, put } from "@vercel/blob";
 import type { GPRunReport } from "./types";
+import { normalizeReport } from "./evaluate";
 
 const BLOB_KEY = "gp-capabilities-last-run.json";
 const localPath = () => path.join(process.cwd(), "data", BLOB_KEY);
@@ -28,6 +29,11 @@ export async function saveGPReport(report: GPRunReport): Promise<void> {
 }
 
 export async function loadGPReport(): Promise<GPRunReport | null> {
+  const raw = await loadRaw();
+  return raw ? normalizeReport(raw) : null;
+}
+
+async function loadRaw(): Promise<GPRunReport | null> {
   try {
     const meta = await head(BLOB_KEY);
     if (meta?.url) {

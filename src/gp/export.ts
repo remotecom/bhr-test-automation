@@ -56,6 +56,7 @@ export function formCell(p?: FormProbe): string {
   if (!p) return "";
   switch (p.status) {
     case "available": return "yes";
+    case "requires_employment": return "yes (needs employment)";
     case "unavailable": return "no";
     case "skipped": return "n/a";
     default: return `error ${p.httpStatus ?? ""}`.trim();
@@ -65,6 +66,7 @@ export function formCell(p?: FormProbe): string {
 function formResponse(p?: FormProbe): string {
   if (!p || p.status === "skipped") return "";
   if (p.status === "available") return `${p.httpStatus} (${p.analysis?.requiredFields.length ?? 0} required / ${p.analysis?.fieldCount ?? 0} fields)`;
+  if (p.status === "requires_employment") return `${p.httpStatus} published, schema needs employment_id`;
   return `${p.httpStatus ?? "ERR"}${p.message ? ` ${p.message}` : ""}`;
 }
 
@@ -168,7 +170,7 @@ export function toMarkdown(report: GPRunReport): string {
   lines.push(`- **Baseline (${report.baselineSource}):** ${s.match} match · ${s.drift} drift · ${s.noBaseline} no baseline`);
   lines.push(`- **Company GP entities:** ${report.entities.filter((e) => e.gpEnabled).map((e) => e.countryCode).join(", ") || "none"}${report.entitiesError ? ` (${report.entitiesError})` : ""}`);
   lines.push("");
-  lines.push(`Coverage is "full" when \`global_payroll_contract_details\` (employer) and \`global_payroll_personal_details\` (employee) are both published. yes = 200, no = 404/422 "Form not available", n/a = not probed for this country.`);
+  lines.push(`Coverage is "full" when \`global_payroll_contract_details\` (employer) and \`global_payroll_personal_details\` (employee) are both published. yes = 200, yes (needs employment) = published but the schema can only be read with an \`employment_id\`, no = 404/422 "Form not available", n/a = not probed for this country.`);
   lines.push("");
 
   const formCols = GP_FORMS.map((f) => f.short);

@@ -17,6 +17,8 @@ It supports two audiences (from the Mohit / James 1:1 on 2026-10-05):
 
 A 200 response with a schema means the form is published. A 404 or 422 (`Form not available for requested country`) means it is not available. Any other response is an error. Responses of 429 and 5xx are retried with backoff.
 
+In the Remote sandbox, `global_payroll_contract_details` returns `400 missing required query parameter: employment_id` instead of the schema. Unsupported countries get the 422 before that parameter check, so this 400 counts as **published, schema needs an employment** (the dashed pill in the tab). Runs saved before this rule existed are re-read with it when loaded.
+
 The report creates nothing and changes no sandbox state, so it is safe to run against a shared or partner company.
 
 **Coverage** is *Full* when both contract details (the employer flow) and personal details (the employee flow) are published. It is *Employer only* or *Employee only* when just one of them is (for example HUN). Otherwise it is *Not supported*.

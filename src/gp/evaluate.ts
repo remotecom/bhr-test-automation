@@ -4,6 +4,7 @@
 
 import { GP_BASELINE, type GPCountryExpectation } from "../../data/gp-capability-baseline";
 import type { LegalEntity } from "../setup/entity-swap";
+import { isPublished } from "./types";
 import type {
   BaselineCheck,
   BaselineVerdict,
@@ -13,6 +14,7 @@ import type {
   GPCoverage,
   GPEntitySummary,
   GPFormKey,
+  GPRunReport,
   GPRunSummary,
 } from "./types";
 
@@ -20,8 +22,8 @@ export function classifyCoverage(forms: Partial<Record<GPFormKey, FormProbe>>): 
   const c = forms.contract_details?.status;
   const p = forms.personal_details?.status;
   if (c === "error" || p === "error" || !c || !p) return "unknown";
-  const employer = c === "available";
-  const employee = p === "available";
+  const employer = isPublished(c);
+  const employee = isPublished(p);
   if (employer && employee) return "full";
   if (employer) return "employer_only";
   if (employee) return "employee_only";
@@ -42,7 +44,7 @@ function yn(v: boolean | null | undefined): string {
 
 function availability(probe?: FormProbe): boolean | null {
   if (!probe || probe.status === "error" || probe.status === "skipped") return null;
-  return probe.status === "available";
+  return isPublished(probe.status);
 }
 
 export function evaluateBaseline(
@@ -114,6 +116,31 @@ export function entityStatusFor(
   return gp.length > 0
     ? { status: "gp_enabled", entityIds: gp.map((e) => e.id) }
     : { status: "entity_no_gp", entityIds: matches.map((e) => e.id) };
+}
+
+/**
+ * Re-evaluate a saved report with the current rules. Older runs recorded the Remote sandbox
+ * "missing required query parameter: employment_id" 400 as an error; it means published.
+ */
+export function normalizeReport(report: GPRunReport): GPRunReport {
+  const countries = report.countries.map((c) => {
+    const forms = { ...c.forms };
+    let changed = false;
+    for (const [key, p] of Object.entries(forms) as [GPFormKey, FormProbe][]) {
+      if (p?.status === "error" && p.httpStatus === 400 && /employment_id/i.test(p.message || "")) {
+        forms[key] = { ...p, status: "requires_employment", message: "Published; schema only readable with an employment_id" };
+        changed = true;
+      }
+    }
+    if (!changed) return c;
+    return {
+      ...c,
+      forms,
+      coverage: classifyCoverage(forms),
+      baseline: evaluateBaseline(c.code, forms, c.nameRequired),
+    };
+  });
+  return { ...report, countries, summary: summarize(countries, report.summary.duration) };
 }
 
 export function summarize(countries: CountryCapability[], durationMs: number): GPRunSummary {

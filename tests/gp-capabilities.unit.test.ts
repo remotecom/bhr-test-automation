@@ -5,7 +5,9 @@
 
 import { describe, expect, it } from "vitest";
 import { analyzeSchema, isNameRequired, unwrapSchema } from "../src/gp/schema-analysis";
-import { classifyCoverage, entityStatusFor, evaluateBaseline, summarize } from "../src/gp/evaluate";
+import { classifyCoverage, entityStatusFor, evaluateBaseline, normalizeReport, summarize } from "../src/gp/evaluate";
+import { probeGPForm } from "../src/steps/gp-forms";
+import type { RemoteClient } from "../src/client";
 import { toMarkdown, toMatrixCSV, toTestCasesCSV, TEST_GUIDE_COLUMNS } from "../src/gp/export";
 import { GP_BASELINE } from "../data/gp-capability-baseline";
 import type { CountryCapability, FormProbe, GPRunReport } from "../src/gp/types";
@@ -90,6 +92,44 @@ describe("GP coverage and baseline", () => {
     expect(entityStatusFor("CAN", ents).status).toBe("entity_no_gp");
     expect(entityStatusFor("DEU", ents).status).toBe("none");
     expect(entityStatusFor("DEU", null).status).toBe("unknown");
+  });
+});
+
+describe("GP probe: forms that need an employment", () => {
+  const fakeClient = (status: number, data: unknown) =>
+    ({ get: async () => ({ status, data }) }) as unknown as RemoteClient;
+
+  it("GP-U10 400 'missing required query parameter: employment_id' counts as published", async () => {
+    const p = await probeGPForm(fakeClient(400, { message: "missing required query parameter: employment_id" }), "GBR", "global_payroll_contract_details");
+    expect(p.status).toBe("requires_employment");
+    expect(classifyCoverage({ contract_details: p, personal_details: avail("p") })).toBe("full");
+    expect(evaluateBaseline("GBR", { contract_details: p, personal_details: avail("p", analyzeSchema({ required: ["name"], properties: {} })) }, true).verdict).toBe("match");
+  });
+
+  it("GP-U11 other 400s are still errors; 422 is still unavailable", async () => {
+    expect((await probeGPForm(fakeClient(400, { message: "bad form" }), "GBR", "x")).status).toBe("error");
+    expect((await probeGPForm(fakeClient(422, { message: "Form not available for requested country" }), "LVA", "x")).status).toBe("unavailable");
+  });
+
+  it("GP-U12 normalizeReport upgrades runs saved before the fix", () => {
+    const old: CountryCapability = {
+      code: "GBR", name: "United Kingdom", nameRequired: true, coverage: "unknown",
+      forms: {
+        contract_details: { form: "global_payroll_contract_details", status: "error", httpStatus: 400, message: "missing required query parameter: employment_id" },
+        personal_details: avail("global_payroll_personal_details", analyzeSchema({ required: ["name"], properties: {} })),
+      },
+      entity: { status: "none", entityIds: [] },
+      catalog: { inCatalog: true, gpSchemasAdvertised: [] },
+      baseline: { verdict: "error", checks: [] },
+      durationMs: 1,
+    };
+    const r = normalizeReport({
+      timestamp: "t", gatewayEnv: "sandbox", scope: "baseline", baselineSource: "", catalogAdvertisesGP: false,
+      entities: [], summary: summarize([old], 1), countries: [old],
+    });
+    expect(r.countries[0].coverage).toBe("full");
+    expect(r.countries[0].baseline.verdict).toBe("match");
+    expect(r.summary).toMatchObject({ full: 1, errors: 0, match: 1 });
   });
 });
 
