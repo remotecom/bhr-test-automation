@@ -1,16 +1,16 @@
 /**
- * POST /api/gp/guide/publish: write the results partners will see to data/gp-guide/published.json.
+ * POST /api/gp/guide/publish: add results to data/gp-guide/published.json, the file partners see.
  *
  * Body: { report?: GPRunReport, checks?: GuideCheckResult[] }
  *
- * Local only: it writes a file in the repo, which you then commit and deploy. Refused where runs
- * are off and on Vercel (read-only filesystem). The report is sanitized (src/gp/guide/publish.ts).
+ * Merges onto what's already published (new checks replace old ones per case; the report is kept
+ * if none is sent), so publishing twice never loses results. Local only: it writes a file in the
+ * repo, which you then commit and deploy. The report is sanitized (src/gp/guide/publish.ts).
  */
 
-import { writeFile } from "fs/promises";
-import path from "path";
 import { gpRunsRefused } from "@/lib/features";
-import { buildPublished } from "@/src/gp/guide/publish";
+import { buildPublished, mergePublished } from "@/src/gp/guide/publish";
+import { readPublished, writePublished } from "@/src/gp/guide/published-file";
 
 export async function POST(request: Request) {
   const refused = gpRunsRefused();
@@ -23,14 +23,14 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "Body must be JSON" }, { status: 400 });
   }
-  const published = buildPublished(body);
-  if (!published.report && published.checks.length === 0) {
+  const next = buildPublished(body);
+  if (!next.report && next.checks.length === 0) {
     return Response.json({ error: "Nothing to publish: run the report or the guide checks first" }, { status: 400 });
   }
-  const file = path.join(process.cwd(), "data/gp-guide/published.json");
-  await writeFile(file, JSON.stringify(published, null, 2) + "\n");
+  const published = mergePublished(await readPublished(true), next);
+  await writePublished(published);
   return Response.json({
-    publishedAt: published.publishedAt,
+    published,
     file: "data/gp-guide/published.json",
     countries: published.report?.countries.length ?? 0,
     checks: published.checks.length,

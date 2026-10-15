@@ -102,25 +102,23 @@ export function useGPGuide() {
   const publish = useCallback(async (report: GPRunReport | null) => {
     setState((s) => ({ ...s, publishing: true, message: undefined }));
     try {
-      const current = state.published;
-      const byId = { ...Object.fromEntries((current?.checks || []).map((c) => [c.caseId, c])), ...state.local };
+      // The server merges onto what's already published, so only this browser's results are sent
       const res = await fetch("/api/gp/guide/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: report || current?.report, checks: Object.values(byId) }),
+        body: JSON.stringify({ report, checks: Object.values(state.local) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       saveLocalChecks({});
       setState((s) => ({
-        ...s, local: {}, publishing: false,
+        ...s, local: {}, publishing: false, published: data.published ?? s.published,
         message: { tone: "good", text: `Published ${data.checks} checks and ${data.countries} countries to ${data.file}. Commit that file and deploy to share it.` },
       }));
-      await load();
     } catch (err) {
       setState((s) => ({ ...s, publishing: false, message: { tone: "bad", text: `Publish failed: ${(err as Error).message}` } }));
     }
-  }, [state.published, state.local, load]);
+  }, [state.local]);
 
   return { state, run, publish, reload: load };
 }

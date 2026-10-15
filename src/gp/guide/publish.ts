@@ -67,3 +67,18 @@ export function buildPublished(input: { report?: unknown; checks?: unknown }, no
   })) : [];
   return { publishedAt: now.toISOString(), ...(report ? { gatewayEnv: report.gatewayEnv, report } : {}), checks };
 }
+
+/**
+ * Merge a new publish onto what's already published: new checks replace old ones per case, other
+ * cases keep their published result, and the report is kept when none was sent.
+ */
+export function mergePublished(current: GuidePublished, next: GuidePublished): GuidePublished {
+  const byId = new Map(current.checks.map((c) => [c.caseId, c]));
+  for (const c of next.checks) byId.set(c.caseId, c);
+  const report = next.report ?? current.report;
+  return {
+    publishedAt: next.publishedAt,
+    ...(report ? { gatewayEnv: report.gatewayEnv, report } : {}),
+    checks: [...byId.values()].sort((a, b) => a.caseId.localeCompare(b.caseId, undefined, { numeric: true })),
+  };
+}

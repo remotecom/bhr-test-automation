@@ -8,7 +8,7 @@ import { GUIDE } from "../data/gp-guide";
 import { caseGrid, cellText, findInternalRefs, guideFromSheets, type Grid } from "../src/gp/guide/sheet";
 import { readGuideXlsx, writeGuideXlsx } from "../src/gp/guide/xlsx";
 import { GUIDE_STATUSES, GUIDE_TABS, type Guide } from "../src/gp/guide/types";
-import { buildPublished, sanitizeReport } from "../src/gp/guide/publish";
+import { buildPublished, mergePublished, sanitizeReport } from "../src/gp/guide/publish";
 import { GUIDE_CHECKS, runGuideChecks, type GuideCheckResult } from "../src/gp/guide/checks";
 import type { RemoteClient } from "../src/client";
 import type { GPRunReport } from "../src/gp/types";
@@ -97,6 +97,20 @@ describe("GP testing guide: publishing", () => {
     expect(p.checks).toEqual([{ caseId: "A5", outcome: "as_recorded", summary: "ok", details: ["x"], checkedAt: "t" }]);
     expect(p.report?.companySlug).toBeUndefined();
     expect(buildPublished({}).checks).toEqual([]);
+  });
+
+  // 15 Oct 2026: a second Publish on top of a stale copy dropped every published check
+  it("GP-G13 publishing again never loses results: checks merge per case, the report is kept", () => {
+    const a5 = { caseId: "A5", outcome: "as_recorded" as const, summary: "ok", details: [], checkedAt: "t1" };
+    const a1 = { caseId: "A1", outcome: "skipped" as const, summary: "no GBR", details: [], checkedAt: "t1" };
+    const first = mergePublished({ publishedAt: null, checks: [] }, buildPublished({ checks: [a5, a1] }));
+    const reportOnly = mergePublished(first, buildPublished({ report }));
+    expect(reportOnly.checks.map((c) => c.caseId)).toEqual(["A1", "A5"]);
+    expect(reportOnly.report?.countries).toHaveLength(1);
+    const rerun = mergePublished(reportOnly, buildPublished({ checks: [{ ...a1, outcome: "as_recorded", checkedAt: "t2" }] }));
+    expect(rerun.checks.find((c) => c.caseId === "A1")?.outcome).toBe("as_recorded");
+    expect(rerun.checks.find((c) => c.caseId === "A5")?.checkedAt).toBe("t1");
+    expect(rerun.report?.countries).toHaveLength(1);
   });
 
   it("GP-G9 the automated-check column is exported but never imported", async () => {
