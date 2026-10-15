@@ -51,8 +51,8 @@ export const GP_FORMS: GPFormDef[] = [
   { key: "federal_taxes", form: "global_payroll_federal_taxes", label: "Federal taxes (US)", short: "Tax", side: "employee", onlyCountries: ["USA"] },
 ];
 
-export const GP_BASELINE_SOURCE =
-  "Gaps analysis (Tiger, 2026-05-14) + partners-sandbox sweep (2026-09-30)";
+/** Shown to partners in the tab and in exports, so keep internal system and ticket names out of it */
+export const GP_BASELINE_SOURCE = "Remote GP coverage baseline, last updated 2026-09-30";
 
 /** May 2026: countries with admin + contract + personal details forms */
 export const GP_FULL_COVERAGE_MAY_2026: string[] = [
@@ -76,12 +76,13 @@ export interface GPCountryExpectation {
 
 /** Sept 2026 sweep edge cases (these override the May list) */
 const EDGE_CASES: Record<string, GPCountryExpectation> = {
-  HUN: { contract_details: true, personal_details: false, note: "Employer form only (sweep 2026-09-30, Testing Guide A6)" },
-  LVA: { contract_details: false, personal_details: false, note: "No GP forms; 422 'Form not available' (Testing Guide A5)" },
-  KEN: { contract_details: false, personal_details: false, note: "Listed as sellable, but both forms return 422" },
-  NGA: { contract_details: false, personal_details: false, note: "Listed as sellable, but both forms return 422" },
-  PER: { contract_details: false, personal_details: false, note: "Listed as sellable, but both forms return 422" },
-  URY: { contract_details: false, personal_details: false, note: "Listed as sellable, but both forms return 422" },
+  // Notes are shown to partners: no internal ticket, sheet or sales references
+  HUN: { contract_details: true, personal_details: false, note: "Employer form only" },
+  LVA: { contract_details: false, personal_details: false, note: "No GP forms: both return 422 'Form not available'" },
+  KEN: { contract_details: false, personal_details: false, note: "No GP forms: both return 422 'Form not available'" },
+  NGA: { contract_details: false, personal_details: false, note: "No GP forms: both return 422 'Form not available'" },
+  PER: { contract_details: false, personal_details: false, note: "No GP forms: both return 422 'Form not available'" },
+  URY: { contract_details: false, personal_details: false, note: "No GP forms: both return 422 'Form not available'" },
 };
 
 /** Countries where personal details does NOT require `name` (Testing Guide E2) */

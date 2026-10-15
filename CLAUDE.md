@@ -58,7 +58,9 @@ Tests exercise a 5-stage product funnel that narrows available products:
 
 ### Global Payroll (GP) capability report
 
-Read-only Payroll (GP) tab plus CLI. Probes `GET /v1/countries/{cc}/global_payroll_*` per country, reads `global_payroll_enabled` on company legal entities, and compares against `data/gp-capability-baseline.ts` (match / drift). Always use the `global_payroll_` prefixed form names; unprefixed names return EOR schemas with 200. Code lives in `src/gp/`, `src/steps/gp-forms.ts`, `app/api/gp/capabilities/*`, `components/payroll/`. See `docs/gp-capabilities.md`.
+Read-only Payroll (GP) tab plus CLI. Probes `GET /v1/countries/{cc}/global_payroll_*` per country, reads `global_payroll_enabled` on company legal entities, and compares against `data/gp-capability-baseline.ts` (match / drift). Always use the `global_payroll_` prefixed form names; unprefixed names return EOR schemas with 200. Code lives in `src/gp/`, `src/steps/gp-forms.ts`, `app/api/gp/capabilities/*`, `app/api/gp/test-employee/`, `components/payroll/`. See `docs/gp-capabilities.md`.
+
+Test employees: `POST /api/gp/test-employee` creates a `global_payroll_employee` (switching GP on for, or creating, the country's legal entity if needed). The report then fetches employment-specific forms with `?employment_id=`; contract details can't be read without one in either sandbox. Send `personal_email` + `login_email`, never `email` with them (422).
 
 ```bash
 npm run gp:capabilities -- --countries GBR,DEU --strict   # CLI/CI, exits 1 on drift

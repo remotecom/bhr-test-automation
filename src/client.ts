@@ -16,6 +16,17 @@ const ENVIRONMENTS: Record<string, string> = {
   production: "https://gateway.remote.com",
 };
 
+export interface ApiResponse<T> {
+  status: number;
+  data: T;
+  /** Set on errors (status >= 400): Remote's x-request-id, for the API team's logs */
+  requestId?: string;
+  /** Set on errors: CloudFront's x-amz-cf-id, when the failure came from the CDN rather than the API */
+  cdnId?: string;
+  /** Set on errors whose body was not JSON (first 500 characters) */
+  rawText?: string;
+}
+
 interface TokenResponse {
   access_token: string;
   token_type: string;
@@ -105,7 +116,7 @@ export class RemoteClient {
     method: string,
     path: string,
     body?: unknown
-  ): Promise<{ status: number; data: T }> {
+  ): Promise<ApiResponse<T>> {
     const token = await this.getToken();
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
@@ -120,14 +131,29 @@ export class RemoteClient {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    const data = (await res.json().catch(() => null)) as T;
+    // Read the body as text first: 5xx responses are often not JSON, and dropping them
+    // (as res.json() did) loses the only explanation the API gives
+    const rawText = await res.text().catch(() => "");
+    let data: T;
+    try {
+      data = JSON.parse(rawText) as T;
+    } catch {
+      data = null as T;
+    }
     if (process.env.VERBOSE_LOG) {
       console.error(`\n--- ${method} ${this.url(path)} ---`);
       console.error(`Status: ${res.status}`);
       console.error(`Response: ${JSON.stringify(data, null, 2)}`);
       console.error(`---\n`);
     }
-    return { status: res.status, data };
+    const result: ApiResponse<T> = { status: res.status, data };
+    if (res.status >= 400) {
+      // IDs the API team needs to find a failure in their logs (CloudFront's, when the error came from the CDN)
+      result.requestId = res.headers.get("x-request-id") || undefined;
+      result.cdnId = res.headers.get("x-amz-cf-id") || undefined;
+      if (data === null && rawText) result.rawText = rawText.slice(0, 500);
+    }
+    return result;
   }
 
   async get<T = unknown>(path: string) {

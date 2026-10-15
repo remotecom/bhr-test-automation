@@ -19,7 +19,7 @@ A 200 response with a schema means the form is published. A 404 or 422 (`Form no
 
 In the Remote sandbox, `global_payroll_contract_details` returns `400 missing required query parameter: employment_id` instead of the schema. Unsupported countries get the 422 before that parameter check, so this 400 counts as **published, schema needs an employment** (the dashed pill in the tab). Runs saved before this rule existed are re-read with it when loaded.
 
-The report creates nothing and changes no sandbox state, so it is safe to run against a shared or partner company.
+The report itself creates nothing and changes no sandbox state, so it is safe to run against a shared or partner company. Test employees (below) are the one exception, and only when someone clicks the button.
 
 **Coverage** is *Full* when both contract details (the employer flow) and personal details (the employee flow) are published. It is *Employer only* or *Employee only* when just one of them is (for example HUN). Otherwise it is *Not supported*.
 
@@ -30,6 +30,22 @@ The report creates nothing and changes no sandbox state, so it is safe to run ag
 - **skipped fields** (shown as "Form skips X: may be required"): fields the form never asks for, because the schema only requires them under a switched-off rule, `{ if: false, then: { required: [...] } }`
 
 The GBR `overtime_eligible` 422 (API-BEHAVIOUR-2, TASA-1667, fixed in PBYR-4962) followed this pattern: the form never asked for the field, but the backend still required it. A skipped field is something to check, not a confirmed bug. Only submitting the form without it for a real GP employment tells you whether the API enforces it (422) or not (200).
+
+## Test employees
+
+Some forms can only be read for a specific employee. Contract details returns `400 missing required query parameter: employment_id` without one, in both the partners and the Remote sandbox. Other forms can change per employee. The **Test employees** section of the tab fixes this:
+
+1. Pick a country and click **Create test employee**. You can also click the button that appears on a row whose contract details can't be read yet, or the one in the row's detail panel.
+2. The app makes sure the company has a GP-enabled legal entity in that country:
+   - It reuses one that already has GP on.
+   - If the company has an entity there with GP off, it switches GP on (`POST /v1/sandbox/companies/{id}/legal-entities/{entity_id}/activate-global-payroll`).
+   - If there's no entity in the country, it creates one first (`POST /v1/sandbox/companies/{id}/legal-entities`).
+3. It creates the employee the same way the remote-flows `PayrollAdminOnboarding` flow does: `POST /v1/employments` with `type: "global_payroll_employee"`, `engaged_by_legal_entity_id` and `basic_information`. `basic_information` uses `personal_email` with `login_email: "personal"`. Sending the older `email` field alongside them returns `422 email is not accepted`.
+4. That country is re-checked straight away. Contract, administrative, personal and bank details are then fetched with `?employment_id=`, and the row shows **Checked with test employee**.
+
+Every later run uses the saved employees too. They are kept in the browser per environment and company, like the last run. Clicking × stops using an employee; the employee itself stays in the sandbox company.
+
+Sandbox only. Creating an employee changes the connected company (it may add a legal entity and switch GP on), and the tab says what it changed.
 
 ## Baseline
 
@@ -63,7 +79,7 @@ The verdict for each country is one of:
 
 ## Limits and next steps
 
-- Contract details is fetched without `employment_id`, so it returns the generic schema. Field visibility that depends on the entity (for example TT2.0) is not reflected.
+- Without a test employee, contract details can't be read at all, and the other forms show their generic version. Add a test employee to see the forms for a specific employee and entity.
 - A published form means the schema exists. It does not prove that a submission will succeed.
 - **Next:**
   - Admin onboarding scenarios (A1–A8): create the employment, then `PUT /v2/employments/{id}/contract-details` and `/administrative-details`.
@@ -80,7 +96,9 @@ src/gp/evaluate.ts                    Coverage, entity status, baseline verdicts
 src/gp/capability-runner.ts           Orchestration + SSE events
 src/gp/export.ts                      CSV / Markdown builders (pure)
 src/gp/cli.ts                         CLI / CI entry point
+src/gp/test-employee.ts               Create a GP test employee (entity + GP switch-on if needed)
 app/api/gp/capabilities/run/route.ts   SSE run endpoint (stores nothing)
+app/api/gp/test-employee/route.ts      Create-test-employee endpoint
 hooks/useGPCapabilities.ts
 components/payroll/PayrollView.tsx
 tests/gp-capabilities.unit.test.ts

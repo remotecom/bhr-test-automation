@@ -1,7 +1,7 @@
 /**
  * POST /api/gp/capabilities/run: GP capability report, streamed as SSE.
  *
- * Body (optional): { scope?: "baseline" | "all" | "custom", countryCodes?: string[] }
+ * Body (optional): { scope?: "baseline" | "all" | "custom", countryCodes?: string[], employments?: { GBR: "<employment id>" } }
  * Headers: X-Company-Slug, X-Refresh-Token, X-Gateway-Env (same as the suite)
  *
  * Read-only: probes global_payroll_* form schemas and lists legal entities. Creates nothing,
@@ -14,9 +14,8 @@ import type { GPScope } from "@/src/gp/types";
 
 export const maxDuration = 300;
 
-let currentAbort: AbortController | null = null;
-
 const SCOPES: GPScope[] = ["baseline", "all", "custom"];
+const EMPLOYMENT_ID = /^[A-Za-z0-9-]{8,64}$/;
 
 export async function POST(request: Request) {
   const { companySlug, refreshToken, gatewayEnv } = readRequestOverrides(request);
@@ -27,6 +26,7 @@ export async function POST(request: Request) {
 
   let scope: GPScope = "baseline";
   let countryCodes: string[] | undefined;
+  let employments: Record<string, string> | undefined;
   try {
     const body = await request.json();
     if (SCOPES.includes(body?.scope)) scope = body.scope;
@@ -35,6 +35,13 @@ export async function POST(request: Request) {
         .filter((c: unknown): c is string => typeof c === "string" && /^[A-Za-z]{3}$/.test(c.trim()))
         .map((c: string) => c.trim().toUpperCase());
     }
+    if (body?.employments && typeof body.employments === "object") {
+      employments = Object.fromEntries(
+        Object.entries(body.employments as Record<string, unknown>)
+          .filter(([cc, id]) => /^[A-Za-z]{3}$/.test(cc) && typeof id === "string" && EMPLOYMENT_ID.test(id))
+          .map(([cc, id]) => [cc.toUpperCase(), id as string])
+      );
+    }
   } catch {
     // No body: default scope
   }
@@ -42,10 +49,9 @@ export async function POST(request: Request) {
     return Response.json({ error: "Custom scope needs at least one ISO alpha-3 country code" }, { status: 400 });
   }
 
-  // One run at a time per instance: a new run aborts the previous one
-  currentAbort?.abort();
+  // Each run belongs to its own request. Instances are shared between users on Vercel,
+  // so a run must never cancel anyone else's: it stops only when its own client disconnects.
   const abort = new AbortController();
-  currentAbort = abort;
   request.signal?.addEventListener("abort", () => abort.abort());
 
   const stream = new ReadableStream({
@@ -62,7 +68,7 @@ export async function POST(request: Request) {
       runGPCapabilities(
         // Nothing is stored on the server: the browser keeps the finished report (see hooks/useGPCapabilities.ts)
         (event, data) => send(event, data),
-        { signal: abort.signal, companySlug: gate.slug, refreshToken: gate.refreshToken, gatewayEnv, scope, countryCodes }
+        { signal: abort.signal, companySlug: gate.slug, refreshToken: gate.refreshToken, gatewayEnv, scope, countryCodes, employments }
       )
         .then(() => send("gp:process-done", { exitCode: abort.signal.aborted ? 130 : 0 }))
         .catch((err) => {
@@ -70,7 +76,6 @@ export async function POST(request: Request) {
           send("gp:process-done", { exitCode: 1, error: err instanceof Error ? err.message : String(err) });
         })
         .finally(() => {
-          if (currentAbort === abort) currentAbort = null;
           try {
             controller.close();
           } catch {

@@ -42,6 +42,7 @@ export async function probeGPForm(
   const path = `/v1/countries/${encodeURIComponent(countryCode)}/${form}${qs}`;
   const started = Date.now();
 
+  const tag = opts.employmentId ? { employmentId: opts.employmentId } : {};
   let lastErr: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
@@ -65,6 +66,7 @@ export async function probeGPForm(
           form, status: "available", httpStatus: status,
           analysis: analyzeSchema(schema),
           durationMs: Date.now() - started,
+          ...tag,
         };
       }
 
@@ -84,6 +86,7 @@ export async function probeGPForm(
           form, status: "unavailable", httpStatus: status,
           message: extractMessage(data),
           durationMs: Date.now() - started,
+          ...tag,
         };
       }
 
@@ -92,6 +95,7 @@ export async function probeGPForm(
         form, status: "error", httpStatus: status,
         message: (extractMessage(data) || `HTTP ${status}`) + hint,
         durationMs: Date.now() - started,
+        ...tag,
       };
     } catch (err) {
       lastErr = err instanceof Error ? err.message : String(err);

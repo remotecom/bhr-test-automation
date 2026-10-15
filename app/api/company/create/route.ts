@@ -36,40 +36,68 @@ export async function POST(request: Request) {
   try {
     const { gatewayEnv } = readRequestOverrides(request);
     const client = createPartnerClient(gatewayEnv);
-    const ts = Date.now();
     const state = await resolveGbrState(client);
 
     // Create sandbox company with get_oauth_access_tokens action to receive refresh token
     // (singular `action=`, as in the Remote docs and remote.sh)
-    const createRes = await client.post<{
-      data: {
-        tokens: { refresh_token: string; access_token: string };
-        company: { id: string; name: string; status: string; country_code: string };
-      };
-    }>("/v1/companies?action=get_oauth_access_tokens", {
-      country_code: "GBR",
-      desired_currency: "GBP",
-      name: `BHR Test Co ${ts}`,
-      company_owner_email: `bhr-test-${ts}@remote.com`,
-      company_owner_name: "BHR Test Owner",
-      terms_of_service_accepted_at: new Date().toISOString(),
-      registration_number: `BHR${ts}`,
-      phone_number: "1234567890",
-      address_details: {
-        address: "1 Test St",
-        city: "London",
-        postal_code: "SW1A 1AA",
-        state,
-      },
-    });
+    const createOnce = () => {
+      // Fresh unique values per attempt, so a retry never collides with a half-finished first attempt
+      const ts = Date.now();
+      return client.post<{
+        data: {
+          tokens: { refresh_token: string; access_token: string };
+          company: { id: string; name: string; status: string; country_code: string };
+        };
+      }>("/v1/companies?action=get_oauth_access_tokens", {
+        country_code: "GBR",
+        desired_currency: "GBP",
+        name: `BHR Test Co ${ts}`,
+        company_owner_email: `bhr-test-${ts}@remote.com`,
+        company_owner_name: "BHR Test Owner",
+        terms_of_service_accepted_at: new Date().toISOString(),
+        registration_number: `BHR${ts}`,
+        phone_number: "1234567890",
+        address_details: {
+          address: "1 Test St",
+          city: "London",
+          postal_code: "SW1A 1AA",
+          state,
+        },
+      });
+    };
+
+    // The API occasionally returns a bare 500 here and succeeds on an identical retry,
+    // so retry once on 5xx. A 5xx returns no company or tokens, so the partner never ends up with two.
+    let createRes = await createOnce();
+    let retried = false;
+    if (createRes.status >= 500) {
+      console.warn(
+        `Company creation returned ${createRes.status}; retrying once`,
+        { requestId: createRes.requestId, cdnId: createRes.cdnId, body: createRes.rawText ?? createRes.data }
+      );
+      await new Promise((r) => setTimeout(r, 1500));
+      createRes = await createOnce();
+      retried = true;
+    }
 
     if (createRes.status >= 400) {
       // Surface the API's reason (e.g. "not allowed to use the `get_oauth_access_tokens` action")
       const d = createRes.data as unknown as { message?: string; errors?: unknown } | null;
-      // Include both: the message can be generic ("Unprocessable Entity") while errors names the field
-      const reason = [d?.message, d?.errors ? JSON.stringify(d.errors) : ""].filter(Boolean).join(" ");
+      // Include both: the message can be generic ("Unprocessable Entity") while errors names the field.
+      // Non-JSON bodies (common on 5xx) come through as rawText.
+      const reason = [d?.message, d?.errors ? JSON.stringify(d.errors) : "", createRes.rawText || ""].filter(Boolean).join(" ");
+      // Request IDs let the API team find the failure in their logs
+      const ids = [
+        createRes.requestId && `request ID ${createRes.requestId}`,
+        createRes.cdnId && `CloudFront ID ${createRes.cdnId}`,
+      ].filter(Boolean).join(", ");
       return Response.json(
-        { error: `Company creation failed (${createRes.status})${reason ? `: ${reason}` : ""}`, details: createRes.data },
+        {
+          error: `Company creation failed (${createRes.status})${retried ? " twice" : ""}${reason ? `: ${reason}` : ""}${ids ? ` [${ids}]` : ""}`,
+          details: createRes.data,
+          requestId: createRes.requestId,
+          cdnId: createRes.cdnId,
+        },
         { status: createRes.status }
       );
     }

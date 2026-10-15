@@ -38,6 +38,8 @@ export interface FormProbe {
   message?: string;
   analysis?: SchemaAnalysis;
   durationMs?: number;
+  /** Set when the form was fetched for a specific test employee (?employment_id=) */
+  employmentId?: string;
 }
 
 export type GPCoverage = "full" | "employer_only" | "employee_only" | "none" | "unknown";
@@ -79,6 +81,8 @@ export interface CountryCapability {
   };
   baseline: { verdict: BaselineVerdict; checks: BaselineCheck[]; note?: string };
   durationMs: number;
+  /** Test employee the employment-specific forms were fetched for, if any */
+  employmentId?: string;
 }
 
 export type GPScope = "baseline" | "all" | "custom";
@@ -121,6 +125,8 @@ export interface GPRunOptions {
   countryCodes?: string[];
   /** Parallel requests (default 6) */
   concurrency?: number;
+  /** Test employee per country (code -> employment ID); those countries' forms are fetched for that employee */
+  employments?: Record<string, string>;
 }
 
 export type GPBroadcast = (event: string, data: unknown) => void;

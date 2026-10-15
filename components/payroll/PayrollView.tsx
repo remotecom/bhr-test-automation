@@ -6,6 +6,7 @@
  * Layout:
  *   toolbar     run / scope / progress / export
  *   cards       Supported · Partial · Not supported · Needs attention (each one is a filter)
+ *   employees   GP test employees: some forms can only be read (or change) for a specific employee
  *   table       supported + partial countries, with employer and employee form pills
  *   chip list   not-supported countries, compact (we already expect most countries here)
  *
@@ -14,12 +15,13 @@
  */
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useGPCapabilities } from "@/hooks/useGPCapabilities";
+import { useGPCapabilities, type EmployeeState } from "@/hooks/useGPCapabilities";
 import { getDashboardBase } from "@/components/EnvironmentSelector";
 import { GP_BASELINE_COUNTRIES, GP_BASELINE_SOURCE, GP_FORMS, type GPFormDef } from "@/data/gp-capability-baseline";
 import { COVERAGE_LABEL } from "@/src/gp/evaluate";
 import { exportFilename, toMarkdown, toMatrixCSV, toTestCasesCSV } from "@/src/gp/export";
 import type { CountryCapability, FormProbe, GPRunReport, GPScope } from "@/src/gp/types";
+import type { GPTestEmployee } from "@/src/gp/test-employee";
 
 type View = "all" | "supported" | "partial" | "none" | "attention";
 
@@ -34,7 +36,35 @@ const skippedFields = (c: CountryCapability) =>
   GP_FORMS.flatMap((f) => c.forms[f.key]?.analysis?.inertRequired || []);
 const SKIP_EXPLAIN =
   "The form never asks for these fields, but its schema still lists them as required under a rule that is switched off. " +
-  "If the API still requires them, submitting the form fails with a 422 (this happened with UK overtime_eligible). Not tested yet.";
+  "If the API still requires them, submitting the form fails with a 422 even though the form looked complete. Not tested yet.";
+/** A form that is published but can only be read for a specific employee */
+const needsEmployee = (c: CountryCapability) =>
+  GP_FORMS.some((f) => c.forms[f.key]?.status === "requires_employment");
+const shortId = (id: string) => id.slice(0, 8);
+
+/** Callbacks and state each row needs for test employees */
+interface EmployeeCtx {
+  employees: EmployeeState;
+  rechecking: string[];
+  onCreate: (code: string) => void;
+}
+
+function CreateEmployeeButton({ code, ctx, label }: { code: string; ctx: EmployeeCtx; label?: string }) {
+  const busy = ctx.employees.creating === code;
+  return (
+    <button
+      className="gp-mini-btn"
+      disabled={!!ctx.employees.creating}
+      title={`Creates a Global Payroll test employee in ${code} in your test company, then re-checks ${code}'s forms for that employee`}
+      onClick={(e) => {
+        e.stopPropagation();
+        ctx.onCreate(code);
+      }}
+    >
+      {busy ? "Creating…" : label || `Create ${code} test employee`}
+    </button>
+  );
+}
 
 function download(content: string, filename: string, type: string) {
   const blob = new Blob([content], { type: `${type};charset=utf-8` });
@@ -54,7 +84,7 @@ function download(content: string, filename: string, type: string) {
 
 function FormPill({ def, p }: { def: GPFormDef; p?: FormProbe }) {
   if (!p || p.status === "skipped") return null;
-  const base = `${def.label} — ${p.form}`;
+  const base = `${def.label} — ${p.form}${p.employmentId ? `\nRead for test employee ${shortId(p.employmentId)}` : ""}`;
   switch (p.status) {
     case "available": {
       const inert = p.analysis?.inertRequired.length || 0;
@@ -69,7 +99,7 @@ function FormPill({ def, p }: { def: GPFormDef; p?: FormProbe }) {
     }
     case "requires_employment":
       return (
-        <span className="gp-pill gp-pill-on" title={`${base}\nPublished. The schema can only be read for a specific employment (employment_id).`}>
+        <span className="gp-pill gp-pill-on gp-pill-dashed" title={`${base}\nPublished, but the form can only be read for a specific employee. Create a test employee in this country to see it.`}>
           {def.short}
         </span>
       );
@@ -102,8 +132,16 @@ function EntityCell({ c }: { c: CountryCapability }) {
   );
 }
 
-function Notes({ c }: { c: CountryCapability }) {
+function Notes({ c, ctx }: { c: CountryCapability; ctx: EmployeeCtx }) {
   const items: React.ReactNode[] = [];
+  const employee = ctx.employees.byCountry[c.code];
+  if (ctx.rechecking.includes(c.code)) {
+    items.push(<span key="recheck" className="gp-note">Re-checking…</span>);
+  } else if (employee && c.employmentId === employee.employmentId) {
+    items.push(<span key="emp" className="gp-note-good" title={`Employee-specific forms were read for test employee ${employee.employmentId}`}>Checked with test employee</span>);
+  } else if (needsEmployee(c)) {
+    items.push(<CreateEmployeeButton key="need" code={c.code} ctx={ctx} label="Create test employee to read contract details" />);
+  }
   if (c.baseline.verdict === "drift") {
     const failed = c.baseline.checks.filter((ch) => !ch.pass).map((ch) => ch.label.replace(" published", "")).join(", ");
     items.push(<span key="drift" className="gp-note-bad">Changed vs baseline: {failed}</span>);
@@ -132,7 +170,8 @@ function FieldList({ label, fields }: { label: string; fields: string[] }) {
   );
 }
 
-function Detail({ c }: { c: CountryCapability }) {
+function Detail({ c, ctx }: { c: CountryCapability; ctx: EmployeeCtx }) {
+  const employee = ctx.employees.byCountry[c.code];
   return (
     <div className="gp-detail">
       <div className="gp-detail-col">
@@ -144,6 +183,21 @@ function Detail({ c }: { c: CountryCapability }) {
           </div>
         ))}
         {c.baseline.note && <div className="gp-muted">{c.baseline.note}</div>}
+        <div className="gp-detail-title gp-detail-gap">Test employee</div>
+        {employee ? (
+          <div className="gp-muted">
+            {employee.name} · <code>{employee.employmentId}</code>
+            <br />
+            Contract, admin, personal and bank details were read for this employee.
+          </div>
+        ) : c.coverage === "none" ? (
+          <div className="gp-muted">Not available: {c.code} has no GP forms.</div>
+        ) : (
+          <div className="gp-muted">
+            None. Forms were read without an employee, so they show the generic version.{" "}
+            <CreateEmployeeButton code={c.code} ctx={ctx} />
+          </div>
+        )}
       </div>
       <div className="gp-detail-col gp-detail-wide">
         <div className="gp-detail-title">Forms</div>
@@ -175,6 +229,68 @@ function Detail({ c }: { c: CountryCapability }) {
   );
 }
 
+function TestEmployees({ employees, countries, onCreate, onForget, disabled }: {
+  employees: EmployeeState;
+  countries: { code: string; name: string }[];
+  onCreate: (code: string) => void;
+  onForget: (code: string) => void;
+  disabled: boolean;
+}) {
+  const list = Object.values(employees.byCountry).sort((a, b) => a.countryCode.localeCompare(b.countryCode));
+  const available = countries.filter((c) => !employees.byCountry[c.code]);
+  const [pick, setPick] = useState("");
+  const selected = available.some((c) => c.code === pick) ? pick : available.find((c) => c.code === "GBR")?.code || available[0]?.code || "";
+
+  return (
+    <div className="gp-employees">
+      <div className="gp-employees-head">
+        <span className="gp-employees-title">Test employees</span>
+        <span className="gp-muted">
+          Some forms change per employee, and contract details can only be read for one. Create a test employee in a country
+          and the report reads that country&apos;s forms exactly as your integration will see them during onboarding.
+        </span>
+      </div>
+      <div className="gp-employees-row">
+        <select className="gp-select" value={selected} disabled={disabled || !!employees.creating || !available.length} onChange={(e) => setPick(e.target.value)}>
+          {available.length === 0 && <option value="">No countries left</option>}
+          {available.map((c) => (
+            <option key={c.code} value={c.code}>{c.code} · {c.name}</option>
+          ))}
+        </select>
+        <button
+          className="gp-employees-btn"
+          disabled={disabled || !!employees.creating || !selected}
+          onClick={() => selected && onCreate(selected)}
+          title="Creates a Global Payroll employee in your sandbox test company. If needed it also adds a legal entity in that country and switches Global Payroll on for it."
+        >
+          {employees.creating ? `Creating ${employees.creating} employee…` : "Create test employee"}
+        </button>
+        {list.map((e: GPTestEmployee) => (
+          <span key={e.countryCode} className="gp-employee-chip" title={`${e.name}\nEmployment ID: ${e.employmentId}\nCreated ${new Date(e.createdAt).toLocaleString()}`}>
+            {e.countryCode} <span className="gp-muted">{shortId(e.employmentId)}</span>
+            <button
+              className="gp-chip-x"
+              disabled={disabled}
+              onClick={() => onForget(e.countryCode)}
+              title={`Stop using this employee. ${e.countryCode} will be read without an employee again. The employee itself stays in your sandbox company.`}
+              aria-label={`Stop using the ${e.countryCode} test employee`}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      {employees.lastChanges && (
+        <div className="gp-employees-msg gp-note-good">
+          Created a {employees.lastChanges.countryCode} test employee and re-checked {employees.lastChanges.countryCode}.
+          {employees.lastChanges.changes.length > 0 && ` Also: ${employees.lastChanges.changes.join("; ")}.`}
+        </div>
+      )}
+      {employees.error && <div className="gp-employees-msg gp-note-bad">{employees.error}</div>}
+    </div>
+  );
+}
+
 function Card({ label, value, sub, tone, active, onClick, disabled }: {
   label: string; value: number; sub?: string; tone: string; active: boolean; onClick: () => void; disabled?: boolean;
 }) {
@@ -192,8 +308,8 @@ function Card({ label, value, sub, tone, active, onClick, disabled }: {
 // ---------------------------------------------------------------------------
 
 export default function PayrollView() {
-  const { state, run, cancel, loadLastRun, exportable } = useGPCapabilities();
-  const { running, status, queue, results, entities, entitiesError, report, fromLastRun } = state;
+  const { state, run, cancel, loadLastRun, exportable, employees, createEmployee, forgetEmployee, loadTestEmployees } = useGPCapabilities();
+  const { running, status, queue, results, entities, entitiesError, report, fromLastRun, rechecking } = state;
   const [scope, setScope] = useState<GPScope>("baseline");
   const [custom, setCustom] = useState("GBR, DEU, ESP, HUN, LVA");
   const [view, setView] = useState<View>("all");
@@ -202,7 +318,8 @@ export default function PayrollView() {
 
   useEffect(() => {
     loadLastRun();
-  }, [loadLastRun]);
+    loadTestEmployees();
+  }, [loadLastRun, loadTestEmployees]);
 
   const all = useMemo(() => [...results.values()].sort((a, b) => a.code.localeCompare(b.code)), [results]);
   const q = search.trim().toLowerCase();
@@ -250,6 +367,11 @@ export default function PayrollView() {
   };
 
   const pick = (v: View) => setView((cur) => (cur === v ? "all" : v));
+  const ctx: EmployeeCtx = { employees, rechecking, onCreate: createEmployee };
+  // Countries a test employee makes sense for: those with GP forms in the last report, else the known GP countries
+  const employeeCountries = all.length
+    ? all.filter((c) => c.coverage !== "none").map((c) => ({ code: c.code, name: c.name }))
+    : GP_BASELINE_COUNTRIES.map((code) => ({ code, name: code }));
   const progress = queue.length ? Math.round((results.size / queue.length) * 100) : 0;
   const countryName = (code: string) => results.get(code)?.name || code;
   const entityLine = entitiesError
@@ -298,7 +420,7 @@ export default function PayrollView() {
               className="gp-link-btn"
               disabled={!exportable || running}
               onClick={() => exportable && doExport(k, exportable)}
-              title={k === "md" ? "Markdown summary for Notion" : k === "test-cases" ? "CSV in the GP SDK Testing Guide columns" : k === "matrix" ? "CSV, one row per country" : "Raw JSON"}
+              title={k === "md" ? "Markdown summary for Notion" : k === "test-cases" ? "CSV of test cases: scenario, input, expected and actual result, status" : k === "matrix" ? "CSV, one row per country" : "Raw JSON"}
             >
               {k === "md" ? "Markdown" : k === "test-cases" ? "Test cases CSV" : k === "matrix" ? "Matrix CSV" : "JSON"}
             </button>
@@ -336,6 +458,14 @@ export default function PayrollView() {
       </div>
 
 
+      <TestEmployees
+        employees={employees}
+        countries={employeeCountries}
+        onCreate={createEmployee}
+        onForget={forgetEmployee}
+        disabled={running}
+      />
+
       <div className="table-wrap">
         {all.length === 0 ? (
           <div className="gp-empty">
@@ -367,16 +497,16 @@ export default function PayrollView() {
                           <td className="gp-col-country">
                             <span className="gp-caret">{open ? "▾" : "▸"}</span>
                             <span className="gp-code">{c.code}</span> <span className="gp-name" title={c.name}>{c.name}</span>
-                            <div className="gp-notes-inline"><Notes c={c} /></div>
+                            <div className="gp-notes-inline"><Notes c={c} ctx={ctx} /></div>
                           </td>
                           <td className="gp-col-cov"><CoveragePill c={c} /></td>
                           <td className="gp-col-forms">{EMPLOYER_FORMS.map((f) => <FormPill key={f.key} def={f} p={c.forms[f.key]} />)}</td>
                           <td className="gp-col-forms">{EMPLOYEE_FORMS.map((f) => <FormPill key={f.key} def={f} p={c.forms[f.key]} />)}</td>
-                          <td className="gp-col-notes gp-hide-sm"><Notes c={c} /></td>
+                          <td className="gp-col-notes gp-hide-sm"><Notes c={c} ctx={ctx} /></td>
                           <td className="gp-col-entity gp-hide-md"><EntityCell c={c} /></td>
                         </tr>
                         {open && (
-                          <tr className="gp-detail-row"><td colSpan={6}><Detail c={c} /></td></tr>
+                          <tr className="gp-detail-row"><td colSpan={6}><Detail c={c} ctx={ctx} /></td></tr>
                         )}
                       </React.Fragment>
                     );

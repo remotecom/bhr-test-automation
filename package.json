@@ -13,6 +13,7 @@
     "test:eor": "vitest run tests/eor-fallback-path.test.ts",
     "test:readonly": "vitest run tests/read-only.test.ts",
     "test:gp-unit": "vitest run tests/gp-capabilities.unit.test.ts",
+    "test:company-unit": "vitest run tests/company-create.unit.test.ts",
     "gp:capabilities": "npx tsx src/gp/cli.ts",
     "env:sync": "node scripts/env-sync.mjs",
     "env:check": "node scripts/env-sync.mjs --check-only",

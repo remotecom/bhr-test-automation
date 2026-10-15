@@ -11,6 +11,7 @@ import type {
   GPRunReport,
   GPScope,
 } from "@/src/gp/types";
+import type { GPTestEmployee } from "@/src/gp/test-employee";
 
 export interface GPState {
   running: boolean;
@@ -24,6 +25,18 @@ export interface GPState {
   entitiesError?: string;
   report: GPRunReport | null;
   fromLastRun: boolean;
+  /** Country codes being re-checked on their own (after a test employee is added or removed) */
+  rechecking: string[];
+}
+
+export interface EmployeeState {
+  /** Test employees for the connected company, by country code */
+  byCountry: Record<string, GPTestEmployee>;
+  /** Country a test employee is being created for */
+  creating: string | null;
+  error?: string;
+  /** What the last creation changed in the company */
+  lastChanges?: { countryCode: string; changes: string[] };
 }
 
 // ---------------------------------------------------------------------------
@@ -33,11 +46,86 @@ export interface GPState {
 // ---------------------------------------------------------------------------
 
 const LS_PREFIX = "bhr_gp_last_run";
+const LS_EMPLOYEES_PREFIX = "bhr_gp_test_employees";
 
-export function storageKey(): string {
+function scopeSuffix(): string {
   const env = getSelectedEnv();
   const company = getCompanyOverride(env)?.companySlug || "none";
-  return `${LS_PREFIX}__${env}__${company}`;
+  return `${env}__${company}`;
+}
+
+export function storageKey(): string {
+  return `${LS_PREFIX}__${scopeSuffix()}`;
+}
+
+/** Test employees are kept per environment + company too: an employment only exists in its own company */
+export function employeesKey(): string {
+  return `${LS_EMPLOYEES_PREFIX}__${scopeSuffix()}`;
+}
+
+export function loadEmployees(): Record<string, GPTestEmployee> {
+  try {
+    const raw = localStorage.getItem(employeesKey());
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveEmployees(byCountry: Record<string, GPTestEmployee>) {
+  try {
+    localStorage.setItem(employeesKey(), JSON.stringify(byCountry));
+  } catch {
+    // Unavailable storage: the employees still work for this page view
+  }
+}
+
+const employmentMap = (byCountry: Record<string, GPTestEmployee>) =>
+  Object.fromEntries(Object.entries(byCountry).map(([cc, e]) => [cc, e.employmentId]));
+
+/** POST to the GP run endpoint and feed each SSE event to onEvent */
+async function streamRun(
+  body: unknown,
+  onEvent: (event: string, data: Record<string, unknown>) => void,
+  signal: AbortSignal
+) {
+  const response = await fetch("/api/gp/capabilities/run", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getCompanyHeaders(),
+      ...getEnvironmentHeaders(),
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error((err as Record<string, string>).error || `HTTP ${response.status}`);
+  }
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop()!;
+    for (const part of parts) {
+      const ev = part.match(/^event: (.+)$/m);
+      const dt = part.match(/^data: (.+)$/m);
+      if (ev && dt) {
+        try {
+          onEvent(ev[1], JSON.parse(dt[1]));
+        } catch {
+          // Malformed event
+        }
+      }
+    }
+  }
 }
 
 export function saveLocal(report: GPRunReport, key: string) {
@@ -69,10 +157,15 @@ const initial: GPState = {
   entities: [],
   report: null,
   fromLastRun: false,
+  rechecking: [],
 };
 
 export function useGPCapabilities() {
   const [state, setState] = useState<GPState>(initial);
+  const [employees, setEmployees] = useState<EmployeeState>({ byCountry: {}, creating: null });
+  // Read inside callbacks without re-creating them on every change
+  const employeesRef = useRef<Record<string, GPTestEmployee>>({});
+  employeesRef.current = employees.byCountry;
   const abortRef = useRef<AbortController | null>(null);
   // Storage key for the run in progress, fixed when it starts (the company could change mid-run)
   const runKeyRef = useRef<string | null>(null);
@@ -150,42 +243,7 @@ export function useGPCapabilities() {
     }));
 
     try {
-      const response = await fetch("/api/gp/capabilities/run", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getCompanyHeaders(),
-          ...getEnvironmentHeaders(),
-        },
-        body: JSON.stringify({ scope, countryCodes }),
-        signal: abort.signal,
-      });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error((err as Record<string, string>).error || `HTTP ${response.status}`);
-      }
-
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop()!;
-        for (const part of parts) {
-          const ev = part.match(/^event: (.+)$/m);
-          const dt = part.match(/^data: (.+)$/m);
-          if (ev && dt) {
-            try {
-              handleEvent(ev[1], JSON.parse(dt[1]));
-            } catch {
-              // Malformed event
-            }
-          }
-        }
-      }
+      await streamRun({ scope, countryCodes, employments: employmentMap(employeesRef.current) }, handleEvent, abort.signal);
       setState((s) => (s.running ? { ...s, running: false } : s));
     } catch (err) {
       if ((err as Error).name === "AbortError") {
@@ -197,6 +255,75 @@ export function useGPCapabilities() {
   }, [handleEvent]);
 
   const cancel = useCallback(() => abortRef.current?.abort(), []);
+
+  /**
+   * Re-check one country on its own and merge the result into the current report,
+   * e.g. right after a test employee is added, so the row updates without a full run.
+   */
+  const recheck = useCallback(async (code: string) => {
+    const key = storageKey();
+    setState((s) => ({ ...s, rechecking: [...new Set([...s.rechecking, code])] }));
+    const merge = (c: CountryCapability) =>
+      setState((s) => {
+        const results = new Map(s.results);
+        results.set(c.code, c);
+        if (!s.report) return { ...s, results };
+        const countries = [...results.values()].sort((a, b) => a.code.localeCompare(b.code));
+        const report = { ...s.report, countries, summary: summarize(countries, s.report.summary.duration) };
+        saveLocal(report, key);
+        return { ...s, results, report };
+      });
+    try {
+      await streamRun(
+        { scope: "custom", countryCodes: [code], employments: employmentMap(employeesRef.current) },
+        (event, data) => {
+          if (event === "gp:country") merge(data as unknown as CountryCapability);
+        },
+        new AbortController().signal
+      );
+    } catch (err) {
+      setEmployees((e) => ({ ...e, error: `Re-check of ${code} failed: ${(err as Error).message}` }));
+    } finally {
+      setState((s) => ({ ...s, rechecking: s.rechecking.filter((c) => c !== code) }));
+    }
+  }, []);
+
+  const loadTestEmployees = useCallback(() => {
+    setEmployees({ byCountry: loadEmployees(), creating: null });
+  }, []);
+
+  /** Create a GP test employee in the connected company, then re-check that country with it */
+  const createEmployee = useCallback(async (countryCode: string) => {
+    const code = countryCode.trim().toUpperCase();
+    setEmployees((e) => ({ ...e, creating: code, error: undefined, lastChanges: undefined }));
+    try {
+      const res = await fetch("/api/gp/test-employee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getCompanyHeaders(), ...getEnvironmentHeaders() },
+        body: JSON.stringify({ countryCode: code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as Record<string, string>).error || `HTTP ${res.status}`);
+      const employee = data as GPTestEmployee;
+      const byCountry = { ...employeesRef.current, [code]: employee };
+      employeesRef.current = byCountry;
+      saveEmployees(byCountry);
+      setEmployees({ byCountry, creating: null, lastChanges: { countryCode: code, changes: employee.changes } });
+      await recheck(code);
+    } catch (err) {
+      setEmployees((e) => ({ ...e, creating: null, error: (err as Error).message }));
+    }
+  }, [recheck]);
+
+  /** Stop using a test employee (the employment itself stays in the sandbox company) */
+  const forgetEmployee = useCallback(async (countryCode: string) => {
+    const byCountry = { ...employeesRef.current };
+    delete byCountry[countryCode];
+    employeesRef.current = byCountry;
+    saveEmployees(byCountry);
+    setEmployees((e) => ({ ...e, byCountry, lastChanges: undefined, error: undefined }));
+    await recheck(countryCode);
+  }, [recheck]);
 
   const loadLastRun = useCallback(() => {
     const report = loadLocal();
@@ -233,5 +360,5 @@ export function useGPCapabilities() {
     };
   }, [state.report, state.results, state.startedAt, state.gatewayEnv, state.scope, state.entities, state.entitiesError]);
 
-  return { state, run, cancel, loadLastRun, exportable };
+  return { state, run, cancel, loadLastRun, exportable, employees, createEmployee, forgetEmployee, loadTestEmployees };
 }

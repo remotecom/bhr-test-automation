@@ -3,6 +3,7 @@
  *
  * For each country in scope:
  *   1. Probe every global_payroll_* form:  GET /v1/countries/{cc}/{form}
+ *      (with ?employment_id= when the country has a test employee)
  *   2. Analyse each published schema: required, hidden and inert-required fields
  *   3. Cross-reference the company's legal entities (global_payroll_enabled)
  *      and the country catalog (supported_json_schemas)
@@ -88,6 +89,7 @@ async function probeCountry(
   code: string,
   country: Country | undefined,
   entities: GPEntitySummary[] | null,
+  employmentId: string | undefined,
   signal?: AbortSignal
 ): Promise<CountryCapability> {
   const started = Date.now();
@@ -99,7 +101,9 @@ async function probeCountry(
       forms[def.key] = { form: def.form, status: "skipped" };
       continue;
     }
-    forms[def.key] = await probeGPForm(client, code, def.form);
+    // basic_information is filled in before an employment exists, so it is never employment-specific
+    const forEmployee = employmentId && def.key !== "basic_information" ? employmentId : undefined;
+    forms[def.key] = await probeGPForm(client, code, def.form, { employmentId: forEmployee });
   }
 
   const nameRequired =
@@ -124,6 +128,7 @@ async function probeCountry(
     },
     baseline: evaluateBaseline(code, forms, nameRequired),
     durationMs: Date.now() - started,
+    employmentId,
   };
 }
 
@@ -170,7 +175,7 @@ export async function runGPCapabilities(
     codes,
     options.concurrency ?? 6,
     async (code) => {
-      const result = await probeCountry(client, code, byCode.get(code), entities, options.signal);
+      const result = await probeCountry(client, code, byCode.get(code), entities, options.employments?.[code], options.signal);
       results.push(result);
       broadcast("gp:country", result);
     },
