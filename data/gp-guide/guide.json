@@ -1,0 +1,789 @@
+{
+  "title": "Global Payroll SDK Testing Guide (BambooHR)",
+  "subtitle": "Draft. Last updated 15 Oct 2026: statuses reconciled with Remote's tickets, Slack and sandbox runs up to that date. Rows re-tested after 30 Sep say so.",
+  "overview": [
+    {
+      "label": "Purpose",
+      "value": "Test cases for a partner embedding Global Payroll (GP) onboarding and employee bank-detail updates with the Remote Flows SDK and API."
+    },
+    {
+      "label": "Scope",
+      "value": "Global Payroll only. EOR flows (company creation, credit risk, time off, magic links) are covered in the Company Creation Testing Guide."
+    },
+    {
+      "label": "EOR guide",
+      "value": "Company Creation Testing Guide",
+      "url": "https://docs.google.com/spreadsheets/d/13nUVqq2uEMPv_3DnsIRHYv_nrzhyx7G8LNEzXaKzd1A/edit"
+    },
+    {
+      "label": "Environment",
+      "value": "Partners sandbox: https://gateway.partners.remote-sandbox.com"
+    },
+    {
+      "label": "SDK version",
+      "value": "@remoteoss/remote-flows 1.59.0 for live tests (7 Oct). Latest release 1.64.0 (14 Oct). Fixes for A2 and E5 first ship in 1.61.0."
+    },
+    {
+      "label": "SDK flows",
+      "value": "PayrollAdminOnboardingFlow (employer side) and PayrollEmployeeOnboardingFlow (employee self-onboarding)."
+    },
+    {
+      "label": "Token routing",
+      "value": "Requests to /v1/employee/* use an employee assertion token. All other requests use a company-manager assertion token. Both are minted on a server, not in the browser (see Setup S9)."
+    },
+    {
+      "label": "Test country",
+      "value": "United Kingdom (GBR) GP legal entity. Germany was checked for the personal-details form only. Administrative details also checked on CAN, MEX and SWE (15 Oct)."
+    }
+  ],
+  "statusLegend": [
+    {
+      "status": "Verified",
+      "meaning": "Observed live in the sandbox, or read from SDK source where the row says so."
+    },
+    {
+      "status": "Known issue",
+      "meaning": "Reproduced defect. Expected Outcome shows the correct behavior; Remote Response shows what happens today."
+    },
+    {
+      "status": "Fixed, re-verify",
+      "meaning": "A fix has been reported. Re-run the test before relying on the result."
+    },
+    {
+      "status": "Untested",
+      "meaning": "Not yet run. Treat Expected Outcome as unconfirmed."
+    },
+    {
+      "status": "Requires Remote",
+      "meaning": "Needs a setting or action on Remote's side."
+    }
+  ],
+  "cases": [
+    {
+      "id": "S1",
+      "tab": "setup",
+      "scenario": "Assertion grant enabled for the integration",
+      "input": "POST /auth/oauth2/token with grant_type urn:ietf:params:oauth:grant-type:jwt-bearer",
+      "expected": "Access token issued",
+      "response": "If the grant is not enabled: 400 invalid_grant, error_description \"Assertion grant is not enabled for this integration\"",
+      "notes": "Controlled by the \"Act on behalf of users\" setting on the integration (formerly \"Create assertion tokens\"; API key create_assertion_tokens), per environment. Since 12 Oct it also gates company token creation (POST /v1/companies/{id}/create-token returns 403 without it). Remote must confirm it is on for BambooHR's integration in each environment.",
+      "status": "Requires Remote",
+      "comments": "Our test results depend on our own integration's settings. BambooHR's integration is a separate record. Remote said on 12 Oct that BambooHR already has the setting on; confirm per environment.",
+      "method": "api"
+    },
+    {
+      "id": "S2",
+      "tab": "setup",
+      "scenario": "Company creation settings enabled",
+      "input": "POST /v1/companies?action=get_oauth_access_tokens,send_create_password_email",
+      "expected": "Company created (201) with data.company.id and data.tokens",
+      "response": "422 if \"Generate tokens on company creation\" or \"Allow set password on company creation\" is off",
+      "notes": "Both settings must be enabled on the integration before creating a company.",
+      "status": "Verified",
+      "comments": "Full company creation cases are in the EOR guide, Company Creation tab.",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "S3",
+      "tab": "setup",
+      "scenario": "Terms of service timestamp",
+      "input": "terms_of_service_accepted_at in the company creation body",
+      "expected": "Company created (201)",
+      "response": "Required field. The exact error for a missing or stale value was not recorded.",
+      "notes": "Must be an ISO 8601 UTC time from the last 15 minutes. Sending it accepts Remote's Terms of Service for the new company.",
+      "status": "Verified",
+      "comments": "Use an owner email you control; the owner email cannot be changed later.",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "S4",
+      "tab": "setup",
+      "scenario": "Pass KYB in sandbox",
+      "input": "POST /v1/sandbox/companies/{company_id}/bypass-eligibility-checks",
+      "expected": "Company passes eligibility checks",
+      "response": "Success. Status code not recorded.",
+      "notes": "Sandbox helper endpoints return 404 outside sandbox.",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "S5",
+      "tab": "setup",
+      "scenario": "Create a GP legal entity in sandbox",
+      "input": "POST /v1/sandbox/companies/{company_id}/legal-entities with {\"country_code\":\"GBR\"}",
+      "expected": "Legal entity created, active, KYB passed",
+      "response": "Success; entity returned active with KYB passed. Status code not recorded.",
+      "notes": "Uses the company token returned at company creation.",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "S6",
+      "tab": "setup",
+      "scenario": "Enable Global Payroll on the legal entity",
+      "input": "POST /v1/sandbox/companies/{company_id}/legal-entities/{legal_entity_id}/activate-global-payroll (no body)",
+      "expected": "GP product added, global_payroll_enabled set, GP pricing plan created for the entity's country",
+      "response": "Success. Status code not recorded.",
+      "notes": "",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "S7",
+      "tab": "setup",
+      "scenario": "Confirm GP is enabled",
+      "input": "GET /v1/companies/{company_id}/legal-entities",
+      "expected": "Entity shows global_payroll_enabled: true",
+      "response": "Success. Status code not recorded.",
+      "notes": "",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "S8",
+      "tab": "setup",
+      "scenario": "Admin flow legal entity selection",
+      "input": "Render PayrollAdminOnboardingFlow without legalEntityId",
+      "expected": "Flow uses the first GP-enabled legal entity",
+      "response": "Not applicable",
+      "notes": "Pass legalEntityId explicitly if the company has more than one GP-enabled entity.",
+      "status": "Verified",
+      "comments": "Read from SDK source (1.57.0).",
+      "lastChecked": "2026-09-30",
+      "method": "sdk_source"
+    },
+    {
+      "id": "S9",
+      "tab": "setup",
+      "scenario": "Server component is required",
+      "input": "Run the employee flow in the browser holding only an employee token, with no server in between",
+      "expected": "Partner routes requests through its own server: /v1/employee/* with the employee token, everything else with a company-manager token",
+      "response": "403 on onboarding-steps and the country form schema with an employee token. Writes to /v1/employee/* are blocked by the browser: the x-rf-employment-id header the SDK sends is not in the gateway's CORS allow-list.",
+      "notes": "The flow's reads need a company-scoped token, which must not be held in the browser. Fixing the CORS header alone would not remove the need for a server.",
+      "status": "Verified",
+      "comments": "Direct answer to \"can we do this without a backend?\": no.",
+      "lastChecked": "2026-09-30",
+      "method": "sdk"
+    },
+    {
+      "id": "A1",
+      "tab": "admin",
+      "scenario": "Create a GP employment through the admin flow",
+      "input": "PayrollAdminOnboardingFlow on a GP-enabled GBR legal entity; complete basic information",
+      "expected": "Employment created; flow loads the onboarding steps for it",
+      "response": "Employment created; onboarding-steps loaded (after A2's extra request)",
+      "notes": "Requires a GP-enabled legal entity (Setup S5 to S7).",
+      "status": "Verified",
+      "comments": "GP employments also created by API on CAN, MEX and SWE (15 Oct).",
+      "lastChecked": "2026-09-30",
+      "method": "sdk"
+    },
+    {
+      "id": "A2",
+      "tab": "admin",
+      "scenario": "Onboarding steps request right after employment creation",
+      "input": "Create an employment in the admin flow and watch network requests",
+      "expected": "One GET /v1/employments/{id}/onboarding-steps with the real employment ID",
+      "response": "First request goes to /v1/employments/%7Bemployment_id%7D/onboarding-steps and returns 404 {\"message\": \"Employment not found\"}. The flow then repeats it with the real ID within the same second. Still reproduced on remote-flows 1.59.0 (7 Oct, 2 of 2).",
+      "notes": "Not blocking; the flow recovers. Partners alerting on 4xx responses will see a 404 on every GP onboarding.",
+      "status": "Fixed, re-verify",
+      "comments": "Fix first ships in remote-flows 1.61.0. Not yet re-tested on 1.61.0 or later.",
+      "lastChecked": "2026-10-07",
+      "method": "sdk"
+    },
+    {
+      "id": "A3",
+      "tab": "admin",
+      "scenario": "Save contract details (GBR)",
+      "input": "Complete every visible field on the Contract details step and save",
+      "expected": "Entity not on TT2.0: overtime_eligible shown and required. TT2.0 entity: field hidden, not required, defaults to true. Contract details saved in both cases.",
+      "response": "Verified 7 Oct on a GBR entity not on TT2.0: with employment_id, overtime_eligible is a visible required field and the save returns 200. Before the fix (to 6 Oct): 422 overtime_eligible: can't be blank, with the field hidden.",
+      "notes": "Fixed by Remote on 7 Oct. Since 9 Oct the contract-details form must be fetched with ?employment_id=; without it the API returns 400 \"missing required query parameter: employment_id\".",
+      "status": "Verified",
+      "comments": "ESP and TT2.0 entities were checked by Remote outside the sandbox, not live here.",
+      "lastChecked": "2026-10-07",
+      "method": "sdk"
+    },
+    {
+      "id": "A4",
+      "tab": "admin",
+      "scenario": "Save contract details (batch 2 country)",
+      "input": "Same as A3 for DEU, DNK, IRL or SWE",
+      "expected": "Contract details saved",
+      "response": "Not run live. Remote confirmed on 9 Oct that DEU, IRL and SWE contract-details schemas never had overtime_eligible, and that DNK has it as an optional field when TT2.0 is off, by design.",
+      "notes": "The A3 defect does not apply to these countries. A live save is still worth running for each before go-live.",
+      "status": "Untested",
+      "comments": "A GP-enabled SWE legal entity and test employee now exist in the test company (15 Oct).",
+      "method": "sdk"
+    },
+    {
+      "id": "A5",
+      "tab": "admin",
+      "scenario": "Country with no GP contract-details form",
+      "input": "GET /v1/countries/{country_code}/global_payroll_contract_details for a country without the form (e.g. LVA)",
+      "expected": "Partner can tell beforehand that GP onboarding is unavailable for the country",
+      "response": "422 {\"message\": \"Form not available for requested country\"}",
+      "notes": "No documented list of supported countries. Since 9 Oct, Remote reports GP support per country in GET /v1/countries (global_payroll_supported); not yet checked here. See Country Coverage.",
+      "status": "Verified",
+      "comments": "Confirmed on Latvia.",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "A6",
+      "tab": "admin",
+      "scenario": "Country with only the employer-side form (Hungary)",
+      "input": "Start a GP onboarding for HUN",
+      "expected": "Country either publishes both forms or cannot be selected",
+      "response": "Contract-details schema exists; personal-details schema returns 422 \"Form not available for requested country\"",
+      "notes": "The employer can get as far as the invitation, but the employee has no personal-details form to complete. Expected for now: Hungary runs Global Payroll through a local payroll provider, and Remote says the earliest new GP go-live there is March (Remote payroll operations, 14 Oct).",
+      "status": "Untested",
+      "comments": "Schema behavior confirmed 7 Oct. Employee-flow behavior on that 422 is unverified. Treat HUN as not available for GP onboarding.",
+      "lastChecked": "2026-10-07",
+      "method": "api"
+    },
+    {
+      "id": "A7",
+      "tab": "admin",
+      "scenario": "Administrative details step (Canada)",
+      "input": "Run the admin flow for a GP employment in CAN",
+      "expected": "Administrative details step loads the administrative-details form",
+      "response": "Reported on 28 Sep 2026: the step loaded the contract-details form instead. API check 15 Oct: the CAN administrative-details form returns administrative fields (SIN, CPP/QPP, EI exemptions and so on) for a test employee and saves with 200.",
+      "notes": "SDK step not yet run. A GP-enabled CAN legal entity is now available in the test company, so this is no longer blocked.",
+      "status": "Untested",
+      "comments": "If the SDK still shows contract fields on this step, the cause is in the SDK, not the API.",
+      "lastChecked": "2026-10-15",
+      "method": "sdk"
+    },
+    {
+      "id": "A8",
+      "tab": "admin",
+      "scenario": "Contract details language",
+      "input": "Review contract-details labels and options across countries",
+      "expected": "Labels and options in English, except official local terms, which keep their legal name with an English description alongside in most cases.",
+      "response": "Not checked for the GP forms. A string audit of contract-details schemas found native-language text next to rough English translations where no direct translation exists.",
+      "notes": "Not blocking. GP administrative details may also render on the employer side and should be checked.",
+      "status": "Untested",
+      "comments": "Confirm which forms the string audit covered before marking Verified.",
+      "method": "review"
+    },
+    {
+      "id": "E1",
+      "tab": "employee",
+      "scenario": "Save personal details (country that requires name)",
+      "input": "PayrollEmployeeOnboardingFlow, Personal details step, GBR or DEU; fill every visible field and click Save personal details",
+      "expected": "\"Full legal name\" input is shown and the step saves",
+      "response": "Verified 7 Oct on remote-flows 1.59.0: \"Full legal name\" is shown, PUT /v1/employee/personal-details returns 200 and onboarding completes end to end (GBR). The field also renders on DEU, NLD, AUS and BRA. Before the fix: no name input, and Save did nothing.",
+      "notes": "Fixed in the SDK. Use remote-flows 1.59.0 or later.",
+      "status": "Verified",
+      "comments": "FRA, which does not require name, is unchanged. Endpoint behavior is the same as before: 200 with name, 422 without.",
+      "lastChecked": "2026-10-07",
+      "method": "sdk"
+    },
+    {
+      "id": "E2",
+      "tab": "employee",
+      "scenario": "Save personal details (country that does not require name)",
+      "input": "Same as E1 for ESP, FRA, IDN, IRL, ITA or USA",
+      "expected": "Step saves",
+      "response": "Not run live",
+      "notes": "These six schemas do not list name as required.",
+      "status": "Untested",
+      "comments": "",
+      "method": "sdk"
+    },
+    {
+      "id": "E3",
+      "tab": "employee",
+      "scenario": "Nationality value format",
+      "input": "Personal details with nationality \"GBR\"",
+      "expected": "Accepted, or a clear error naming the expected format",
+      "response": "\"Type mismatch. Expected Array, Null but got String.\" The field expects an array of display names, e.g. [\"United Kingdom (UK)\"], not ISO codes.",
+      "notes": "Elsewhere in these flows countries are ISO alpha-3.",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "E4",
+      "tab": "employee",
+      "scenario": "Title value format",
+      "input": "Personal details with title \"Mr\" as displayed in the form",
+      "expected": "Accepted",
+      "response": "\"is invalid\". The API expects lowercase, e.g. \"mr\".",
+      "notes": "",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "E5",
+      "tab": "employee",
+      "scenario": "Resume onboarding",
+      "input": "Save personal details, close the flow, reopen it for the same employment",
+      "expected": "Saved values are shown",
+      "response": "Every field is blank. The flow loads the form schema but never the saved values, and whatever the employee types overwrites what was saved (remote-flows 1.59.0 and earlier).",
+      "notes": "High impact: self-onboarding often happens over several sittings.",
+      "status": "Fixed, re-verify",
+      "comments": "Fix first ships in remote-flows 1.61.0; not yet re-tested. For USA, Remote added employee GET endpoints for federal and state taxes (9 Oct) so those steps can pre-fill too.",
+      "lastChecked": "2026-09-30",
+      "method": "sdk"
+    },
+    {
+      "id": "E6",
+      "tab": "employee",
+      "scenario": "Bank details step visibility",
+      "input": "Employment whose onboarding-steps response includes a self_onboarding sub-step of type employee_provides_bank_details",
+      "expected": "Bank details step shown",
+      "response": "If the onboarding-steps call fails, the bank step is not shown and no error appears",
+      "notes": "Check onboarding-steps succeeds when a bank step is missing.",
+      "status": "Verified",
+      "comments": "Read from SDK source (1.57.0).",
+      "lastChecked": "2026-09-30",
+      "method": "sdk_source"
+    },
+    {
+      "id": "E7",
+      "tab": "employee",
+      "scenario": "Confirm token identity during onboarding",
+      "input": "GET /v1/employee/current with an employee token for an employment that is not yet active",
+      "expected": "Returns the employee the token belongs to",
+      "response": "\"The employment is expected to be active in order to perform this action\"",
+      "notes": "Cannot be used to debug tokens during self-onboarding, which happens before activation.",
+      "status": "Known issue",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "E8",
+      "tab": "employee",
+      "scenario": "Bank details during onboarding",
+      "input": "Employee submits bank details in the flow before activation",
+      "expected": "Saved via PUT /v1/employee/bank-account",
+      "response": "200",
+      "notes": "See Bank Details tab for endpoint, token and scope cases.",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "sdk"
+    },
+    {
+      "id": "B1",
+      "tab": "bank",
+      "scenario": "Employee reads own bank details",
+      "input": "GET /v1/employee/bank-account, employee assertion token",
+      "expected": "Default bank account returned",
+      "response": "200",
+      "notes": "Granted scope matched the requested scope.",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "B2",
+      "tab": "bank",
+      "scenario": "Employee updates own bank details",
+      "input": "PUT /v1/employee/bank-account, employee assertion token, full bank section with one field changed",
+      "expected": "Change saved and visible on re-read",
+      "response": "200; change confirmed on re-read",
+      "notes": "Recommended endpoint and token for a partner updating an employee's bank details.",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "B3",
+      "tab": "bank",
+      "scenario": "Company-manager token on the employee endpoint",
+      "input": "Same PUT as B2 with a company-manager assertion token",
+      "expected": "Request refused",
+      "response": "403 \"Forbidden, invalid role for this endpoint\"",
+      "notes": "Refused by role, not by scope.",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "B4",
+      "tab": "bank",
+      "scenario": "Bank-only write scope",
+      "input": "Same PUT as B2, employee token scoped only to bank_account:write",
+      "expected": "Change saved",
+      "response": "200",
+      "notes": "all:write is not required. A partner can be granted bank-account access only.",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "B5",
+      "tab": "bank",
+      "scenario": "Read-only scope",
+      "input": "Employee token scoped to bank_account:read; GET then PUT",
+      "expected": "Read allowed, write refused",
+      "response": "200 on GET, 403 on PUT",
+      "notes": "",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "B6",
+      "tab": "bank",
+      "scenario": "Unrelated scope",
+      "input": "Same PUT as B2, employee token scoped to timeoff:read",
+      "expected": "Request refused",
+      "response": "403; the error lists the accepted bank-account scopes",
+      "notes": "",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "B7",
+      "tab": "bank",
+      "scenario": "Partial update",
+      "input": "PUT with only the changed field",
+      "expected": "Request rejected with the missing fields named",
+      "response": "422 naming every other required field",
+      "notes": "The whole bank section must be sent on every write. There is no partial-update path.",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "B8",
+      "tab": "bank",
+      "scenario": "Optional field omitted",
+      "input": "Valid full PUT that leaves out an optional field that was previously set (e.g. IBAN)",
+      "expected": "Omitted optional field keeps its value, or the request is rejected",
+      "response": "200, and the omitted optional field is cleared",
+      "notes": "A response from GET cannot be sent back unchanged: read and write use different shapes (see B12).",
+      "status": "Known issue",
+      "comments": "Observed: an IBAN present after UI submission was gone after an API write that left it out.",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "B9",
+      "tab": "bank",
+      "scenario": "Update after activation",
+      "input": "Activate the employment, then repeat B1 to B3",
+      "expected": "Same results as before activation",
+      "response": "Employee GET and PUT 200; company-manager PUT 403",
+      "notes": "Active employees can update their own bank details. Activation does not narrow the permission.",
+      "status": "Verified",
+      "comments": "The public reference for PATCH /v1/employments/{id} does not list bank details as editable on an active employment. That list applies to that endpoint only, not to the bank endpoints.",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "B10",
+      "tab": "bank",
+      "scenario": "Employee with two bank accounts",
+      "input": "Employee adds a second account in the Remote dashboard; partner sends one PUT",
+      "expected": "Other accounts are not removed",
+      "response": "Account count stays at two. Only the account flagged default changes; the other is untouched.",
+      "notes": "A non-default account cannot be read, updated or addressed through this API.",
+      "status": "Verified",
+      "comments": "Requires the Remote employee dashboard to add the second account.",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "B11",
+      "tab": "bank",
+      "scenario": "Identify the default account in a GET response",
+      "input": "GET after several writes on an employee with two accounts",
+      "expected": "Default account in a fixed position",
+      "response": "Order is not stable. The default was first before a write and second after it.",
+      "notes": "Use is_default to find the account a PUT will change; do not rely on index 0.",
+      "status": "Known issue",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "B12",
+      "tab": "bank",
+      "scenario": "Read and write shapes",
+      "input": "Compare the PUT body with the GET response for the same account",
+      "expected": "Same shape for read and write",
+      "response": "PUT takes a flat bank_account_details object (label_name, account_holder, account_number, ownership_type, sort_code for GBR). GET returns an array of objects with is_default, international_details and local_details. label_name is required on write and never returned.",
+      "notes": "Partners must map between the two shapes.",
+      "status": "Known issue",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "B13",
+      "tab": "bank",
+      "scenario": "Employer-side bank update",
+      "input": "PUT /v2/employments/{id}/bank-account-details with a customer API token, then with a company-manager assertion token",
+      "expected": "Both tokens accepted",
+      "response": "200 for both",
+      "notes": "Supported. The API reference currently lists only the customer API token and authorization code flow for this endpoint.",
+      "status": "Verified",
+      "comments": "Primary recommendation is still the employee endpoint (B2).",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "B14",
+      "tab": "bank",
+      "scenario": "Offboarded employee",
+      "input": "Employee PUT for an offboarded employment",
+      "expected": "Request refused",
+      "response": "Not run",
+      "notes": "Offboarding cannot be undone, so this needs a second test employment.",
+      "status": "Untested",
+      "comments": "",
+      "method": "api"
+    },
+    {
+      "id": "B15",
+      "tab": "bank",
+      "scenario": "Split payments",
+      "input": "Not applicable to GP",
+      "expected": "Not applicable",
+      "response": "Not applicable",
+      "notes": "Split payments are not generally supported for Global Payroll. Storing more than one account is supported (B10).",
+      "status": "Verified",
+      "comments": "Behavior differs for EOR. Confirm which product a question refers to before answering.",
+      "lastChecked": "2026-09-30",
+      "method": "remote"
+    },
+    {
+      "id": "B16",
+      "tab": "bank",
+      "scenario": "IBAN returned without being submitted",
+      "input": "GET after submitting a GBR account with no IBAN",
+      "expected": "No IBAN, or a documented derived value",
+      "response": "An IBAN came back populated",
+      "notes": "Unknown whether the sandbox generates it or it is derived. Do not treat a returned IBAN as authoritative yet.",
+      "status": "Untested",
+      "comments": "",
+      "method": "api"
+    },
+    {
+      "id": "T1",
+      "tab": "tokens",
+      "scenario": "Partner token",
+      "input": "POST /auth/oauth2/token, grant_type client_credentials, client ID and secret as Basic auth",
+      "expected": "Token for the integration itself, valid about one hour",
+      "response": "Token issued; no refresh token",
+      "notes": "Can create companies and read reference data. Cannot manage a company's employments.",
+      "status": "Verified",
+      "comments": "401 invalid_client means a wrong ID and secret pair or the wrong environment.",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "T2",
+      "tab": "tokens",
+      "scenario": "Company-manager assertion token",
+      "input": "JWT signed with the client secret, sub urn:remote-api:company-manager:user:<user_id>, exchanged with the jwt-bearer grant",
+      "expected": "Company-manager token issued",
+      "response": "Token issued",
+      "notes": "sub must be a user ID. An employment ID or slug in its place will not work.",
+      "status": "Verified",
+      "comments": "Find user IDs with GET /v1/company-managers?company_id=... using a company-scoped token.",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "T3",
+      "tab": "tokens",
+      "scenario": "Employee assertion token",
+      "input": "Same as T2 with sub urn:remote-api:employee:employment:<employment_id>",
+      "expected": "Employee token issued",
+      "response": "Token issued",
+      "notes": "Used for /v1/employee/* only.",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "T4",
+      "tab": "tokens",
+      "scenario": "Requested scopes are granted",
+      "input": "Request bank_account:write, bank_account:read or timeoff:read in both the JWT claim and the token request body",
+      "expected": "Granted scope matches the requested scope",
+      "response": "Matched in every test",
+      "notes": "",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "T5",
+      "tab": "tokens",
+      "scenario": "Subject does not exist",
+      "input": "Employee assertion for a random employment UUID",
+      "expected": "Token refused with a description of the problem",
+      "response": "400 invalid_grant, error_description \"Subject not found or not managed by this client\"",
+      "notes": "Previously returned with no error_description.",
+      "status": "Fixed, re-verify",
+      "comments": "Error code and status code are unchanged; read error_description. Fix merged 2 Oct; not yet confirmed deployed to the partners sandbox or re-run.",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "T6",
+      "tab": "tokens",
+      "scenario": "Subject outside the client's companies",
+      "input": "Employee assertion for a real employment in a company this client does not manage",
+      "expected": "Token refused with a description of the problem",
+      "response": "400 invalid_grant, error_description \"Subject not found or not managed by this client\"",
+      "notes": "Same message as T5 by design, so the endpoint cannot be used to check whether an employment exists elsewhere.",
+      "status": "Fixed, re-verify",
+      "comments": "Fix merged 2 Oct; not yet confirmed deployed to the partners sandbox or re-run.",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "T7",
+      "tab": "tokens",
+      "scenario": "Assertion grant not enabled",
+      "input": "Assertion request on an integration with \"Create assertion tokens\" off",
+      "expected": "Token refused with a description of the problem",
+      "response": "400 invalid_grant, error_description \"Assertion grant is not enabled for this integration\"",
+      "notes": "See Setup S1. The setting is now called \"Act on behalf of users\".",
+      "status": "Fixed, re-verify",
+      "comments": "Fix merged 2 Oct; not yet confirmed deployed to the partners sandbox or re-run.",
+      "lastChecked": "2026-09-30",
+      "method": "api"
+    },
+    {
+      "id": "T8",
+      "tab": "tokens",
+      "scenario": "Invalid client credentials",
+      "input": "Assertion request signed or sent with a wrong or rotated client secret",
+      "expected": "Token refused with a description of the problem",
+      "response": "400 invalid_grant, error_description \"Invalid client credentials\"",
+      "notes": "Applies to the assertion, authorization_code and refresh_token grants.",
+      "status": "Untested",
+      "comments": "Not run in the harness.",
+      "method": "api"
+    },
+    {
+      "id": "T9",
+      "tab": "tokens",
+      "scenario": "Integration disabled",
+      "input": "Token request for a disabled integration",
+      "expected": "Token refused with a description of the problem",
+      "response": "400 invalid_grant, error_description \"Integration is not enabled\"",
+      "notes": "",
+      "status": "Untested",
+      "comments": "",
+      "method": "api"
+    }
+  ],
+  "coverage": {
+    "title": "Country coverage of GP onboarding forms",
+    "intro": "Schema check of every country returned by GET /v1/countries in the partners sandbox, Sep 2026. This measures form coverage: a missing form means the SDK cannot onboard there, not that Global Payroll is unavailable. Notes added 15 Oct.",
+    "rows": [
+      {
+        "measure": "Countries returned by GET /v1/countries",
+        "count": 224,
+        "countries": "",
+        "notes": ""
+      },
+      {
+        "measure": "Publish the GP contract-details form",
+        "count": 57,
+        "countries": "",
+        "notes": "Employer side"
+      },
+      {
+        "measure": "Publish the GP personal-details form",
+        "count": 56,
+        "countries": "",
+        "notes": "Employee side"
+      },
+      {
+        "measure": "Publish the contract-details form only",
+        "count": 1,
+        "countries": "HUN",
+        "notes": "See GP Admin Onboarding A6"
+      },
+      {
+        "measure": "Publish both forms",
+        "count": 56,
+        "countries": "",
+        "notes": "Both are needed to complete an onboarding"
+      },
+      {
+        "measure": "Personal-details form does not require name",
+        "count": 6,
+        "countries": "ESP, FRA, IDN, IRL, ITA, USA",
+        "notes": "Not affected by GP Employee Onboarding E1"
+      },
+      {
+        "measure": "Personal-details form requires name",
+        "count": 50,
+        "countries": "",
+        "notes": "Affected by GP Employee Onboarding E1 until the fix is verified"
+      },
+      {
+        "measure": "Contract-details form affected by the hidden required field",
+        "count": 2,
+        "countries": "GBR, ESP",
+        "notes": "See GP Admin Onboarding A3. ESP from the schema only."
+      },
+      {
+        "measure": "How to check a country",
+        "countries": "GET /v1/countries/{country_code}/global_payroll_personal_details and .../global_payroll_contract_details. A 422 \"Form not available for requested country\" means the form is not published.",
+        "notes": "No published list of supported countries exists today."
+      },
+      {
+        "measure": "Neighboring countries differ",
+        "countries": "Estonia and Lithuania have the forms; Latvia does not. Croatia has them; Slovenia does not.",
+        "notes": "Coverage cannot be inferred by region."
+      },
+      {
+        "measure": "Not GP-live",
+        "countries": "KEN, NGA, PER, URY",
+        "notes": "GP forms switched off on purpose: no GP customers there yet (Remote payroll operations, 14 Oct). Not a coverage gap."
+      },
+      {
+        "measure": "Runs through a payroll provider",
+        "countries": "HUN",
+        "notes": "Explains the missing personal-details form. See GP Admin Onboarding A6."
+      },
+      {
+        "measure": "GP support flag",
+        "countries": "GET /v1/countries",
+        "notes": "Since 9 Oct, Remote reports global_payroll_supported per country, and lists the GP form names in supported_json_schemas. Not yet checked here; could replace the per-form check."
+      },
+      {
+        "measure": "Contract details needs an employment",
+        "countries": "GET .../global_payroll_contract_details",
+        "notes": "Since 9 Oct, the contract-details form returns 400 without ?employment_id=. Check coverage with the personal-details form, or with an employment."
+      }
+    ]
+  }
+}

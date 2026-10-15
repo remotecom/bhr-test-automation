@@ -12,7 +12,7 @@
     "test:cor-ir35": "vitest run tests/cor-ir35-path.test.ts",
     "test:eor": "vitest run tests/eor-fallback-path.test.ts",
     "test:readonly": "vitest run tests/read-only.test.ts",
-    "test:gp-unit": "vitest run tests/gp-capabilities.unit.test.ts tests/gp-field-check.unit.test.ts",
+    "test:gp-unit": "vitest run tests/gp-capabilities.unit.test.ts tests/gp-field-check.unit.test.ts tests/gp-guide.unit.test.ts",
     "test:company-unit": "vitest run tests/company-create.unit.test.ts",
     "gp:capabilities": "npx tsx src/gp/cli.ts",
     "env:sync": "node scripts/env-sync.mjs",
@@ -22,7 +22,9 @@
     "start:next": "next start",
     "start:local": "npx tsx src/dashboard/run.ts",
     "dashboard": "npx tsx src/dashboard/server.ts",
-    "start": "npx tsx src/dashboard/run.ts"
+    "start": "npx tsx src/dashboard/run.ts",
+    "gp:guide:export": "npx tsx src/gp/guide/cli.ts export",
+    "gp:guide:import": "npx tsx src/gp/guide/cli.ts import"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.2",
@@ -41,6 +43,7 @@
   "dependencies": {
     "@vercel/blob": "^2.3.3",
     "dotenv": "^17.4.1",
+    "exceljs": "^4.4.0",
     "jose": "^6.2.2",
     "jsonwebtoken": "^9.0.2",
     "next": "^16.2.2",
