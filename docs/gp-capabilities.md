@@ -85,7 +85,12 @@ Runs use the deployer's client credentials and write to a sandbox, so only local
 
 Set `NEXT_PUBLIC_GP_RUNS=true` to allow runs in a production build (not for a partner deploy).
 
-To publish: run the report and the guide checks locally, click **Publish** on Test cases, then commit `data/gp-guide/published.json` and deploy. The file is sanitized: no company slug, legal entities or employment IDs (request IDs stay).
+To publish: run the report and the guide checks locally, then click **Publish** on Test cases. Publish adds to what is already published (new checks replace old ones per case; the report is kept if you don't send a new one) and is sanitized: no company slug, legal entities or employment IDs (request IDs stay).
+
+Where it goes (`src/gp/guide/published-store.ts`):
+
+- **Vercel Blob (the normal setup).** Create a **private** Blob store in the Vercel project (Storage > Blob > connect to the project), which sets `BLOB_READ_WRITE_TOKEN` on the deploy, and put the same token in your local `.env`. Publish then goes live for partners straight away; each publish also keeps a dated copy in `gp-guide/history/`. Reads bypass the CDN cache.
+- **No store yet.** Publish writes `data/gp-guide/published.json`; commit and deploy it to share. The deploy also falls back to this bundled copy if the store is empty or unreadable.
 
 ## Baseline
 
@@ -138,7 +143,8 @@ src/gp/export.ts                      CSV / Markdown builders (pure)
 src/gp/cli.ts                         CLI / CI entry point
 src/gp/guide/                         Testing guide: types, sheet <-> JSON, xlsx, automated checks, publish
 data/gp-guide/guide.json              The testing guide (source of truth)
-data/gp-guide/published.json          Results partners see (written by Publish)
+data/gp-guide/published.json          Bundled fallback for published results (written by Publish when no Blob store is set up)
+src/gp/guide/published-store.ts       Where published results live: Vercel Blob or the repo file
 components/payroll/GuideView.tsx      Test cases view
 app/api/gp/guide/*                    published (GET), xlsx (GET), run and publish (local only)
 src/gp/test-employee.ts               Create a GP test employee (entity + GP switch-on if needed)

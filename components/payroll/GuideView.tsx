@@ -151,7 +151,7 @@ export default function GuideView({ runsEnabled, employments, report }: {
               className="gg-btn"
               disabled={running || publishing || (unpublishedCount === 0 && !report)}
               onClick={() => publish(report)}
-              title="Writes data/gp-guide/published.json with these results and the current country report (no company, entity or employee IDs). Commit it and deploy to share it with partners."
+              title="Shares these results and the current country report with partners (no company, entity or employee IDs). Adds to what is already published."
             >
               {publishing ? "Publishing…" : "Publish"}
             </button>

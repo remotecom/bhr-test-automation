@@ -97,7 +97,7 @@ export function useGPGuide() {
 
   /**
    * Publish this browser's results (on top of what's already published) and the country report.
-   * Writes data/gp-guide/published.json; commit it to share.
+   * Live at once with Vercel Blob set up; otherwise saved to data/gp-guide/published.json to commit.
    */
   const publish = useCallback(async (report: GPRunReport | null) => {
     setState((s) => ({ ...s, publishing: true, message: undefined }));
@@ -113,7 +113,12 @@ export function useGPGuide() {
       saveLocalChecks({});
       setState((s) => ({
         ...s, local: {}, publishing: false, published: data.published ?? s.published,
-        message: { tone: "good", text: `Published ${data.checks} checks and ${data.countries} countries to ${data.file}. Commit that file and deploy to share it.` },
+        message: {
+          tone: "good",
+          text: data.storage === "blob"
+            ? `Published ${data.checks} checks and ${data.countries} countries. Partners see them now.`
+            : `Saved ${data.checks} checks and ${data.countries} countries to data/gp-guide/published.json. No results store is set up yet, so commit and deploy that file to share it.`,
+        },
       }));
     } catch (err) {
       setState((s) => ({ ...s, publishing: false, message: { tone: "bad", text: `Publish failed: ${(err as Error).message}` } }));
