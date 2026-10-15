@@ -83,6 +83,40 @@ export interface CountryCapability {
   durationMs: number;
   /** Test employee the employment-specific forms were fetched for, if any */
   employmentId?: string;
+  /** Results of submitting forms without their skipped fields (merged in from the browser for display/export) */
+  fieldChecks?: FieldCheckResult[];
+}
+
+/**
+ * Skipped-field check: submit an employer form to a test employee with its skipped fields left out.
+ *   not_enforced     the API accepted it, so the skipped fields aren't required in practice
+ *   enforced         the API rejected it and named one of the skipped fields
+ *   inconclusive     the API rejected it for some other field (the test values, not the skipped fields)
+ *   nothing_to_check this employee's version of the form has no skipped fields
+ *   error            the check couldn't run (schema fetch failed, unexpected status, ...)
+ */
+export type FieldCheckOutcome = "not_enforced" | "enforced" | "inconclusive" | "nothing_to_check" | "error";
+
+export interface FieldCheckResult {
+  countryCode: string;
+  form: GPFormKey;
+  /** Skipped fields that were left out of the submission */
+  skippedFields: string[];
+  outcome: FieldCheckOutcome;
+  /** Skipped fields the API named as required */
+  enforcedFields: string[];
+  /** Other fields the API rejected (why a check is inconclusive) */
+  otherRejected: string[];
+  /** Fields that were sent, filled with test values */
+  sentFields: string[];
+  httpStatus?: number;
+  message?: string;
+  requestId?: string;
+  employmentId?: string;
+  checkedAt: string;
+  /** live: run from this app. recorded: a documented earlier result (see data/gp-field-checks.ts) */
+  source: "live" | "recorded";
+  sourceNote?: string;
 }
 
 export type GPScope = "baseline" | "all" | "custom";

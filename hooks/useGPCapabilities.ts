@@ -5,9 +5,12 @@ import { getCompanyHeaders, getCompanyOverride } from "@/components/CompanySelec
 import { getEnvironmentHeaders, getSelectedEnv } from "@/components/EnvironmentSelector";
 import { normalizeReport, summarize } from "@/src/gp/evaluate";
 import { GP_BASELINE_SOURCE } from "@/data/gp-capability-baseline";
+import { RECORDED_FIELD_CHECKS } from "@/data/gp-field-checks";
 import type {
   CountryCapability,
+  FieldCheckResult,
   GPEntitySummary,
+  GPFormKey,
   GPRunReport,
   GPScope,
 } from "@/src/gp/types";
@@ -47,6 +50,7 @@ export interface EmployeeState {
 
 const LS_PREFIX = "bhr_gp_last_run";
 const LS_EMPLOYEES_PREFIX = "bhr_gp_test_employees";
+const LS_CHECKS_PREFIX = "bhr_gp_field_checks";
 
 function scopeSuffix(): string {
   const env = getSelectedEnv();
@@ -79,6 +83,53 @@ function saveEmployees(byCountry: Record<string, GPTestEmployee>) {
   } catch {
     // Unavailable storage: the employees still work for this page view
   }
+}
+
+// ---------------------------------------------------------------------------
+// Skipped-field checks: kept per environment + company, like test employees
+// ---------------------------------------------------------------------------
+
+export interface FieldCheckState {
+  /** Latest result per `${country}:${form}`; live results replace recorded ones */
+  byKey: Record<string, FieldCheckResult>;
+  /** Key of the check in progress */
+  running: string | null;
+  error?: string;
+}
+
+export const checkKey = (country: string, form: GPFormKey) => `${country}:${form}`;
+
+function checksKey(): string {
+  return `${LS_CHECKS_PREFIX}__${scopeSuffix()}`;
+}
+
+/** Recorded results first, then this browser's live results on top */
+export function loadChecks(): Record<string, FieldCheckResult> {
+  const byKey: Record<string, FieldCheckResult> = {};
+  for (const r of RECORDED_FIELD_CHECKS) byKey[checkKey(r.countryCode, r.form)] = r;
+  try {
+    const raw = localStorage.getItem(checksKey());
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && typeof parsed === "object") Object.assign(byKey, parsed);
+  } catch {
+    // Unavailable storage: recorded results only
+  }
+  return byKey;
+}
+
+function saveChecks(byKey: Record<string, FieldCheckResult>) {
+  const live = Object.fromEntries(Object.entries(byKey).filter(([, r]) => r.source === "live"));
+  try {
+    localStorage.setItem(checksKey(), JSON.stringify(live));
+  } catch {
+    // Unavailable storage: the result still shows for this page view
+  }
+}
+
+/** Attach check results to each country, for display and export */
+export function withFieldChecks(c: CountryCapability, byKey: Record<string, FieldCheckResult>): CountryCapability {
+  const checks = Object.values(byKey).filter((r) => r.countryCode === c.code);
+  return checks.length ? { ...c, fieldChecks: checks } : c;
 }
 
 const employmentMap = (byCountry: Record<string, GPTestEmployee>) =>
@@ -163,6 +214,7 @@ const initial: GPState = {
 export function useGPCapabilities() {
   const [state, setState] = useState<GPState>(initial);
   const [employees, setEmployees] = useState<EmployeeState>({ byCountry: {}, creating: null });
+  const [checks, setChecks] = useState<FieldCheckState>({ byKey: {}, running: null });
   // Read inside callbacks without re-creating them on every change
   const employeesRef = useRef<Record<string, GPTestEmployee>>({});
   employeesRef.current = employees.byCountry;
@@ -290,6 +342,35 @@ export function useGPCapabilities() {
 
   const loadTestEmployees = useCallback(() => {
     setEmployees({ byCountry: loadEmployees(), creating: null });
+    setChecks({ byKey: loadChecks(), running: null });
+  }, []);
+
+  /** Submit a country's form to its test employee without the skipped fields (writes to that employee only) */
+  const runFieldCheck = useCallback(async (countryCode: string, form: GPFormKey) => {
+    const code = countryCode.toUpperCase();
+    const employee = employeesRef.current[code];
+    if (!employee) {
+      setChecks((c) => ({ ...c, error: `Create a ${code} test employee first` }));
+      return;
+    }
+    const key = checkKey(code, form);
+    setChecks((c) => ({ ...c, running: key, error: undefined }));
+    try {
+      const res = await fetch("/api/gp/field-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getCompanyHeaders(), ...getEnvironmentHeaders() },
+        body: JSON.stringify({ countryCode: code, form, employmentId: employee.employmentId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as Record<string, string>).error || `HTTP ${res.status}`);
+      setChecks((c) => {
+        const byKey = { ...c.byKey, [key]: data as FieldCheckResult };
+        saveChecks(byKey);
+        return { byKey, running: null };
+      });
+    } catch (err) {
+      setChecks((c) => ({ ...c, running: null, error: `${code} check failed: ${(err as Error).message}` }));
+    }
   }, []);
 
   /** Create a GP test employee in the connected company, then re-check that country with it */
@@ -344,21 +425,25 @@ export function useGPCapabilities() {
 
   /** The final report, or a partial one built from the results so far (for exporting a cancelled run) */
   const exportable: GPRunReport | null = useMemo(() => {
-    if (state.report) return state.report;
-    if (state.results.size === 0) return null;
-    const countries = [...state.results.values()].sort((a, b) => a.code.localeCompare(b.code));
-    return {
-      timestamp: new Date(state.startedAt || Date.now()).toISOString(),
-      gatewayEnv: state.gatewayEnv,
-      scope: state.scope,
-      baselineSource: GP_BASELINE_SOURCE,
-      catalogAdvertisesGP: countries.some((c) => c.catalog.gpSchemasAdvertised.length > 0),
-      entities: state.entities,
-      entitiesError: state.entitiesError,
-      summary: summarize(countries, state.startedAt ? Date.now() - state.startedAt : 0),
-      countries,
-    };
-  }, [state.report, state.results, state.startedAt, state.gatewayEnv, state.scope, state.entities, state.entitiesError]);
+    let base: GPRunReport | null = state.report;
+    if (!base && state.results.size > 0) {
+      const countries = [...state.results.values()].sort((a, b) => a.code.localeCompare(b.code));
+      base = {
+        timestamp: new Date(state.startedAt || Date.now()).toISOString(),
+        gatewayEnv: state.gatewayEnv,
+        scope: state.scope,
+        baselineSource: GP_BASELINE_SOURCE,
+        catalogAdvertisesGP: countries.some((c) => c.catalog.gpSchemasAdvertised.length > 0),
+        entities: state.entities,
+        entitiesError: state.entitiesError,
+        summary: summarize(countries, state.startedAt ? Date.now() - state.startedAt : 0),
+        countries,
+      };
+    }
+    if (!base) return null;
+    // Skipped-field check results live separately (per browser); attach them for export
+    return { ...base, countries: base.countries.map((c) => withFieldChecks(c, checks.byKey)) };
+  }, [state.report, state.results, state.startedAt, state.gatewayEnv, state.scope, state.entities, state.entitiesError, checks.byKey]);
 
-  return { state, run, cancel, loadLastRun, exportable, employees, createEmployee, forgetEmployee, loadTestEmployees };
+  return { state, run, cancel, loadLastRun, exportable, employees, createEmployee, forgetEmployee, loadTestEmployees, checks, runFieldCheck };
 }

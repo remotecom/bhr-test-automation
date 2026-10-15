@@ -413,3 +413,5 @@ a.gp-entity-on:hover, a.gp-entity-off:hover { text-decoration: underline; }
 .gp-mini-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .gp-pill-dashed { border-style: dashed; }
 .gp-detail-gap { margin-top: 8px; }
+
+.gp-check-error { padding: 0 20px 6px; }

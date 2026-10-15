@@ -62,6 +62,8 @@ Read-only Payroll (GP) tab plus CLI. Probes `GET /v1/countries/{cc}/global_payro
 
 Test employees: `POST /api/gp/test-employee` creates a `global_payroll_employee` (switching GP on for, or creating, the country's legal entity if needed). The report then fetches employment-specific forms with `?employment_id=`; contract details can't be read without one in either sandbox. Send `personal_email` + `login_email`, never `email` with them (422).
 
+Skipped-field check: `POST /api/gp/field-check` submits contract or administrative details to a test employee with the form's `if: false`-only required fields left out (`src/gp/field-check.ts`), using the SDK's envelopes (`{ contract_details }` / `{ administrative_details }` on `PUT /v2/employments/{id}/...`). Sandbox only. Recorded results: `data/gp-field-checks.ts`.
+
 ```bash
 npm run gp:capabilities -- --countries GBR,DEU --strict   # CLI/CI, exits 1 on drift
 npm run test:gp-unit                                      # pure unit tests, no network

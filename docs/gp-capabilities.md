@@ -47,6 +47,23 @@ Every later run uses the saved employees too. They are kept in the browser per e
 
 Sandbox only. Creating an employee changes the connected company (it may add a legal entity and switch GP on), and the tab says what it changed.
 
+## Checking skipped fields
+
+A skipped field only matters if the API still requires it. With a test employee in the country, each "skips X: may be required" note has a **Check** button:
+
+1. Read the form for that employee: `GET /v1/countries/{cc}/{form}?employment_id={id}`.
+2. Fill every field the form requires with test values (choices prefer "no" so extra sections stay closed; addresses and hours get realistic values), leaving the skipped fields out.
+3. Submit it the way remote-flows 1.59.0 does: `PUT /v2/employments/{id}/contract-details` with `{ contract_details: {...} }`, or `PUT /v2/employments/{id}/administrative-details` with `{ administrative_details: {...} }`.
+
+| Result | Meaning |
+|---|---|
+| **not enforced** | The API accepted the form, so the skipped fields aren't required in practice |
+| **API requires skipped X** | Rejected, naming a skipped field: a client following the form can't submit it (shown in red, counts as needs attention) |
+| **inconclusive** | Rejected for a different field, usually a test value; the tooltip names it and has the request ID |
+| **no skipped fields** | That employee's version of the form doesn't skip anything |
+
+It writes test values to that test employee only, and refuses to run outside the two sandboxes. Results are kept in the browser per environment and company, and included in all exports. Checks already settled elsewhere live in `data/gp-field-checks.ts` (UK administrative details: not enforced, GP SDK harness, 30 Sep 2026) and show until a live check replaces them.
+
 ## Baseline
 
 The baseline lives in `data/gp-capability-baseline.ts`. It is built from two sources:

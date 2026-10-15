@@ -15,12 +15,12 @@
  */
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useGPCapabilities, type EmployeeState } from "@/hooks/useGPCapabilities";
+import { checkKey, useGPCapabilities, withFieldChecks, type EmployeeState, type FieldCheckState } from "@/hooks/useGPCapabilities";
 import { getDashboardBase } from "@/components/EnvironmentSelector";
 import { GP_BASELINE_COUNTRIES, GP_BASELINE_SOURCE, GP_FORMS, type GPFormDef } from "@/data/gp-capability-baseline";
 import { COVERAGE_LABEL } from "@/src/gp/evaluate";
 import { exportFilename, toMarkdown, toMatrixCSV, toTestCasesCSV } from "@/src/gp/export";
-import type { CountryCapability, FormProbe, GPRunReport, GPScope } from "@/src/gp/types";
+import type { CountryCapability, FieldCheckResult, FormProbe, GPFormKey, GPRunReport, GPScope } from "@/src/gp/types";
 import type { GPTestEmployee } from "@/src/gp/test-employee";
 
 type View = "all" | "supported" | "partial" | "none" | "attention";
@@ -29,14 +29,15 @@ const EMPLOYER_FORMS = GP_FORMS.filter((f) => f.side === "employer");
 const EMPLOYEE_FORMS = GP_FORMS.filter((f) => f.side === "employee");
 
 const needsAttention = (c: CountryCapability) =>
-  c.baseline.verdict === "drift" || c.baseline.verdict === "error" || c.coverage === "unknown";
+  c.baseline.verdict === "drift" || c.baseline.verdict === "error" || c.coverage === "unknown" ||
+  !!c.fieldChecks?.some((r) => r.outcome === "enforced");
 const isPartial = (c: CountryCapability) => c.coverage === "employer_only" || c.coverage === "employee_only";
-/** Fields a form never asks for, although its schema lists them as required under a switched-off rule */
-const skippedFields = (c: CountryCapability) =>
-  GP_FORMS.flatMap((f) => c.forms[f.key]?.analysis?.inertRequired || []);
 const SKIP_EXPLAIN =
   "The form never asks for these fields, but its schema still lists them as required under a rule that is switched off. " +
-  "If the API still requires them, submitting the form fails with a 422 even though the form looked complete. Not tested yet.";
+  "If the API still requires them, submitting the form fails with a 422 even though the form looked complete.";
+/** Employer forms the skipped-field check can submit (see src/gp/field-check.ts) */
+const CHECKABLE: GPFormKey[] = ["contract_details", "administrative_details"];
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 /** A form that is published but can only be read for a specific employee */
 const needsEmployee = (c: CountryCapability) =>
   GP_FORMS.some((f) => c.forms[f.key]?.status === "requires_employment");
@@ -47,6 +48,8 @@ interface EmployeeCtx {
   employees: EmployeeState;
   rechecking: string[];
   onCreate: (code: string) => void;
+  checks: FieldCheckState;
+  onCheck: (code: string, form: GPFormKey) => void;
 }
 
 function CreateEmployeeButton({ code, ctx, label }: { code: string; ctx: EmployeeCtx; label?: string }) {
@@ -63,6 +66,76 @@ function CreateEmployeeButton({ code, ctx, label }: { code: string; ctx: Employe
     >
       {busy ? "Creating…" : label || `Create ${code} test employee`}
     </button>
+  );
+}
+
+/** One line describing a skipped-field check result */
+function checkSummary(r: FieldCheckResult): { text: string; cls: string; title: string } {
+  const when = `${r.source === "recorded" ? "Recorded" : "Checked"} ${fmtDate(r.checkedAt)}`;
+  const detail = [
+    when + (r.employmentId ? ` on test employee ${shortId(r.employmentId)}` : ""),
+    r.sourceNote,
+    r.httpStatus ? `HTTP ${r.httpStatus}` : "",
+    r.message,
+    r.requestId ? `Request ID ${r.requestId}` : "",
+    r.sentFields.length ? `Sent with test values: ${r.sentFields.join(", ")}` : "",
+  ].filter(Boolean).join("\n");
+  const skipped = r.skippedFields.join(", ");
+  switch (r.outcome) {
+    case "not_enforced":
+      return { text: `Skips ${skipped}: not enforced`, cls: "gp-note-good", title: `The API accepted the form without ${skipped}, so the skipped fields aren't required in practice.\n${detail}` };
+    case "enforced":
+      return { text: `API requires skipped ${r.enforcedFields.join(", ")}`, cls: "gp-note-bad", title: `The API rejected the form because ${r.enforcedFields.join(", ")} was missing, but the form never asks for it. A client following the form can't submit it.\n${detail}` };
+    case "inconclusive":
+      return { text: `Check inconclusive`, cls: "gp-note-warn", title: `The API rejected the form for other fields (${r.otherRejected.join(", ") || "see message"}), so this didn't show whether ${skipped} is required. Usually the test values were rejected.\n${detail}` };
+    case "nothing_to_check":
+      return { text: `No skipped fields for test employee`, cls: "gp-note-good", title: `This employee's version of the form doesn't skip any required fields.\n${detail}` };
+    default:
+      return { text: `Check failed`, cls: "gp-note-bad", title: detail };
+  }
+}
+
+function CheckButton({ code, form, ctx, label }: { code: string; form: GPFormKey; ctx: EmployeeCtx; label?: string }) {
+  const busy = ctx.checks.running === checkKey(code, form);
+  return (
+    <button
+      className="gp-mini-btn"
+      disabled={!!ctx.checks.running || !!ctx.employees.creating}
+      title={`Submits this form to your ${code} test employee with the skipped fields left out, filling everything else with test values. Writes to that test employee only.`}
+      onClick={(e) => {
+        e.stopPropagation();
+        ctx.onCheck(code, form);
+      }}
+    >
+      {busy ? "Checking…" : label || "Check"}
+    </button>
+  );
+}
+
+/** Skipped-field note for one form: the check result if there is one, otherwise a prompt to run it */
+function SkipNote({ c, form, ctx }: { c: CountryCapability; form: GPFormKey; ctx: EmployeeCtx }) {
+  const skipped = c.forms[form]?.analysis?.inertRequired || [];
+  const result = c.fieldChecks?.find((r) => r.form === form);
+  const label = GP_FORMS.find((f) => f.key === form)?.short || form;
+  const employee = ctx.employees.byCountry[c.code];
+  const canCheck = !!employee && CHECKABLE.includes(form);
+
+  if (result && (result.outcome !== "nothing_to_check" || skipped.length === 0)) {
+    const s = checkSummary(result);
+    return (
+      <span className={s.cls} title={s.title}>
+        {label}: {s.text}
+        {canCheck && result.source === "recorded" && <> <CheckButton code={c.code} form={form} ctx={ctx} label="Re-check" /></>}
+      </span>
+    );
+  }
+  if (!skipped.length) return null;
+  const names = skipped.join(", ");
+  const shown = names.length <= 24 ? names : `${skipped.length} field${skipped.length > 1 ? "s" : ""}`;
+  return (
+    <span className="gp-note-warn" title={`${names}\n\n${SKIP_EXPLAIN}\n\n${canCheck ? "Click Check to find out." : CHECKABLE.includes(form) ? `Create a ${c.code} test employee to check it.` : "Only employer forms can be checked."}`}>
+      {label} skips {shown}: may be required{canCheck && <> <CheckButton code={c.code} form={form} ctx={ctx} /></>}
+    </span>
   );
 }
 
@@ -148,15 +221,10 @@ function Notes({ c, ctx }: { c: CountryCapability; ctx: EmployeeCtx }) {
   }
   if (c.baseline.verdict === "error" || c.coverage === "unknown") items.push(<span key="err" className="gp-note-bad">Probe error</span>);
   if (c.nameRequired === false) items.push(<span key="name" className="gp-note">name optional</span>);
-  const skipped = skippedFields(c);
-  if (skipped.length) {
-    const names = skipped.join(", ");
-    const shown = names.length <= 24 ? names : `${skipped.length} field${skipped.length > 1 ? "s" : ""}`;
-    items.push(
-      <span key="skip" className="gp-note-warn" title={`${skipped.join(", ")}\n\n${SKIP_EXPLAIN}`}>
-        Form skips {shown}: may be required
-      </span>
-    );
+  for (const f of GP_FORMS) {
+    const hasSkips = (c.forms[f.key]?.analysis?.inertRequired.length || 0) > 0;
+    const hasResult = !!c.fieldChecks?.some((r) => r.form === f.key);
+    if (hasSkips || hasResult) items.push(<SkipNote key={`skip-${f.key}`} c={c} form={f.key} ctx={ctx} />);
   }
   return <>{items.reduce<React.ReactNode[]>((acc, n, i) => (i ? [...acc, <span key={`s${i}`} className="gp-dot-sep"> · </span>, n] : [n]), [])}</>;
 }
@@ -219,6 +287,9 @@ function Detail({ c, ctx }: { c: CountryCapability; ctx: EmployeeCtx }) {
                   <FieldList label="hidden" fields={p.analysis.hiddenFields} />
                   <FieldList label="skipped by the form, may still be required" fields={p.analysis.inertRequired} />
                   {p.analysis.inertRequired.length > 0 && <div className="gp-fields gp-muted">{SKIP_EXPLAIN}</div>}
+                  {(p.analysis.inertRequired.length > 0 || c.fieldChecks?.some((r) => r.form === f.key)) && (
+                    <div className="gp-fields"><SkipNote c={c} form={f.key} ctx={ctx} /></div>
+                  )}
                 </>
               )}
             </div>
@@ -308,7 +379,7 @@ function Card({ label, value, sub, tone, active, onClick, disabled }: {
 // ---------------------------------------------------------------------------
 
 export default function PayrollView() {
-  const { state, run, cancel, loadLastRun, exportable, employees, createEmployee, forgetEmployee, loadTestEmployees } = useGPCapabilities();
+  const { state, run, cancel, loadLastRun, exportable, employees, createEmployee, forgetEmployee, loadTestEmployees, checks, runFieldCheck } = useGPCapabilities();
   const { running, status, queue, results, entities, entitiesError, report, fromLastRun, rechecking } = state;
   const [scope, setScope] = useState<GPScope>("baseline");
   const [custom, setCustom] = useState("GBR, DEU, ESP, HUN, LVA");
@@ -321,7 +392,10 @@ export default function PayrollView() {
     loadTestEmployees();
   }, [loadLastRun, loadTestEmployees]);
 
-  const all = useMemo(() => [...results.values()].sort((a, b) => a.code.localeCompare(b.code)), [results]);
+  const all = useMemo(
+    () => [...results.values()].sort((a, b) => a.code.localeCompare(b.code)).map((c) => withFieldChecks(c, checks.byKey)),
+    [results, checks.byKey]
+  );
   const q = search.trim().toLowerCase();
   const matchesSearch = (c: CountryCapability) => !q || c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
 
@@ -367,7 +441,7 @@ export default function PayrollView() {
   };
 
   const pick = (v: View) => setView((cur) => (cur === v ? "all" : v));
-  const ctx: EmployeeCtx = { employees, rechecking, onCreate: createEmployee };
+  const ctx: EmployeeCtx = { employees, rechecking, onCreate: createEmployee, checks, onCheck: runFieldCheck };
   // Countries a test employee makes sense for: those with GP forms in the last report, else the known GP countries
   const employeeCountries = all.length
     ? all.filter((c) => c.coverage !== "none").map((c) => ({ code: c.code, name: c.name }))
@@ -465,6 +539,7 @@ export default function PayrollView() {
         onForget={forgetEmployee}
         disabled={running}
       />
+      {checks.error && <div className="gp-employees-msg gp-note-bad gp-check-error">{checks.error}</div>}
 
       <div className="table-wrap">
         {all.length === 0 ? (

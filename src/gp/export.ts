@@ -89,6 +89,22 @@ function driftText(c: CountryCapability): string {
     .join("; ");
 }
 
+/** Plain-language result of each skipped-field check on a country, e.g. "Admin: skips tax_code: not enforced (200, 30 Sep 2026)" */
+export function fieldCheckText(c: CountryCapability): string[] {
+  const label = (key: string) => GP_FORMS.find((f) => f.key === key)?.short || key;
+  return (c.fieldChecks || []).map((r) => {
+    const when = `${r.httpStatus ? `${r.httpStatus}, ` : ""}${r.source === "recorded" ? "recorded " : ""}${r.checkedAt.slice(0, 10)}`;
+    const skipped = r.skippedFields.join(", ");
+    switch (r.outcome) {
+      case "not_enforced": return `${label(r.form)}: skips ${skipped}: not enforced (${when})`;
+      case "enforced": return `${label(r.form)}: API requires skipped ${r.enforcedFields.join(", ")} (${when})`;
+      case "inconclusive": return `${label(r.form)}: check inconclusive, API rejected ${r.otherRejected.join(", ") || "other fields"} (${when})`;
+      case "nothing_to_check": return `${label(r.form)}: no skipped fields for the test employee (${when})`;
+      default: return `${label(r.form)}: check failed${r.message ? `: ${r.message}` : ""} (${when})`;
+    }
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Matrix CSV: one row per country, every column
 // ---------------------------------------------------------------------------
@@ -98,7 +114,7 @@ export function toMatrixCSV(report: GPRunReport): string {
     "Code", "Country", "Region", "Coverage", "Company entity",
     ...GP_FORMS.map((f) => f.label),
     "Name required", "Contract required fields", "Personal required fields",
-    "Hidden fields", "Skipped by form (may be required)", "Catalog GP schemas",
+    "Hidden fields", "Skipped by form (may be required)", "Skipped-field check", "Catalog GP schemas",
     "Baseline", "Baseline detail",
   ];
   const rows = report.countries.map((c) => {
@@ -109,7 +125,7 @@ export function toMatrixCSV(report: GPRunReport): string {
       c.nameRequired === null ? "n/a" : c.nameRequired ? "yes" : "no",
       (c.forms.contract_details?.analysis?.requiredFields || []).join(" "),
       (c.forms.personal_details?.analysis?.requiredFields || []).join(" "),
-      hidden.join(" "), inert.join(" "),
+      hidden.join(" "), inert.join(" "), fieldCheckText(c).join("; "),
       c.catalog.gpSchemasAdvertised.join(" "),
       VERDICT_STATUS[c.baseline.verdict], driftText(c) || c.baseline.note || "",
     ]);
@@ -136,7 +152,9 @@ export function toTestCaseRows(report: GPRunReport): string[][] {
       `Company: ${ENTITY_LABEL[c.entity.status]}`,
       c.nameRequired !== null ? `name required: ${c.nameRequired ? "yes" : "no"}` : "",
       hidden.length ? `Hidden: ${hidden.join(", ")}` : "",
-      inert.length ? `Form skips ${inert.join(", ")}; the API may still require them (untested)` : "",
+      ...(c.fieldChecks?.length
+        ? fieldCheckText(c)
+        : [inert.length ? `Form skips ${inert.join(", ")}; the API may still require them (untested)` : ""]),
       c.baseline.note || "",
     ].filter(Boolean).join(" | ");
     return [
@@ -195,15 +213,18 @@ export function toMarkdown(report: GPRunReport): string {
   }
 
   const signals = report.countries
-    .map((c) => ({ c, ...allSignals(c) }))
-    .filter((x) => x.inert.length > 0);
+    .map((c) => ({ c, ...allSignals(c), checks: fieldCheckText(c) }))
+    .filter((x) => x.inert.length > 0 || x.checks.length > 0);
   if (signals.length) {
     lines.push("");
     lines.push(`## Fields the form skips that the API may still require`);
     lines.push("");
-    lines.push(`The form never asks for these fields, but its schema still lists them as required under a rule that is switched off. If the API still requires them, submitting the form fails with a 422 (this happened with UK \`overtime_eligible\`). Not tested yet.`);
+    lines.push(`The form never asks for these fields, but its schema still lists them as required under a rule that is switched off. If the API still requires them, submitting the form fails with a 422 (this happened with UK \`overtime_eligible\`). Countries with a check result were tested by submitting the form to a test employee without the skipped fields.`);
     lines.push("");
-    for (const x of signals) lines.push(`- **${x.c.code}**: ${x.inert.map((f) => `\`${f}\``).join(", ")}`);
+    for (const x of signals) {
+      const fields = x.inert.map((f) => `\`${f}\``).join(", ");
+      lines.push(`- **${x.c.code}**: ${x.checks.length ? x.checks.join("; ") : `${fields} (untested)`}`);
+    }
   }
 
   lines.push("");
