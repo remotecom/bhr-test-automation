@@ -212,8 +212,6 @@ function Notes({ c, ctx }: { c: CountryCapability; ctx: EmployeeCtx }) {
     items.push(<span key="recheck" className="gp-note">Re-checking…</span>);
   } else if (employee && c.employmentId === employee.employmentId) {
     items.push(<span key="emp" className="gp-note-good" title={`Employee-specific forms were read for test employee ${employee.employmentId}`}>Checked with test employee</span>);
-  } else if (needsEmployee(c)) {
-    items.push(<CreateEmployeeButton key="need" code={c.code} ctx={ctx} label="Create test employee to read contract details" />);
   }
   if (c.baseline.verdict === "drift") {
     const failed = c.baseline.checks.filter((ch) => !ch.pass).map((ch) => ch.label.replace(" published", "")).join(", ");
@@ -300,12 +298,14 @@ function Detail({ c, ctx }: { c: CountryCapability; ctx: EmployeeCtx }) {
   );
 }
 
-function TestEmployees({ employees, countries, onCreate, onForget, disabled }: {
+function TestEmployees({ employees, countries, onCreate, onForget, disabled, needEmployee }: {
   employees: EmployeeState;
   countries: { code: string; name: string }[];
   onCreate: (code: string) => void;
   onForget: (code: string) => void;
   disabled: boolean;
+  /** Countries whose forms can only be read for an employee, and don't have one yet */
+  needEmployee: string[];
 }) {
   const list = Object.values(employees.byCountry).sort((a, b) => a.countryCode.localeCompare(b.countryCode));
   const available = countries.filter((c) => !employees.byCountry[c.code]);
@@ -321,6 +321,13 @@ function TestEmployees({ employees, countries, onCreate, onForget, disabled }: {
           and the report reads that country&apos;s forms exactly as your integration will see them during onboarding.
         </span>
       </div>
+      {needEmployee.length > 0 && (
+        <div className="gp-employees-need" title={needEmployee.join(", ")}>
+          <span className="gp-pill gp-pill-on gp-pill-dashed">Contract</span>{" "}
+          {needEmployee.length === 1 ? `${needEmployee[0]}'s` : `${needEmployee.length} countries'`} contract details can only be read with a test employee.
+          Create one for the countries you&apos;re testing, here or from a country&apos;s expanded row.
+        </div>
+      )}
       <div className="gp-employees-row">
         <select className="gp-select" value={selected} disabled={disabled || !!employees.creating || !available.length} onChange={(e) => setPick(e.target.value)}>
           {available.length === 0 && <option value="">No countries left</option>}
@@ -538,6 +545,7 @@ export default function PayrollView() {
         onCreate={createEmployee}
         onForget={forgetEmployee}
         disabled={running}
+        needEmployee={all.filter((c) => needsEmployee(c) && !employees.byCountry[c.code]).map((c) => c.code)}
       />
       {checks.error && <div className="gp-employees-msg gp-note-bad gp-check-error">{checks.error}</div>}
 

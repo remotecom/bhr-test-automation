@@ -415,3 +415,4 @@ a.gp-entity-on:hover, a.gp-entity-off:hover { text-decoration: underline; }
 .gp-detail-gap { margin-top: 8px; }
 
 .gp-check-error { padding: 0 20px 6px; }
+.gp-employees-need { margin-top: 6px; font-size: 11px; color: #8b949e; }
