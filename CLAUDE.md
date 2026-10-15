@@ -64,9 +64,13 @@ Test employees: `POST /api/gp/test-employee` creates a `global_payroll_employee`
 
 Skipped-field check: `POST /api/gp/field-check` submits contract or administrative details to a test employee with the form's `if: false`-only required fields left out (`src/gp/field-check.ts`), using the SDK's envelopes (`{ contract_details }` / `{ administrative_details }` on `PUT /v2/employments/{id}/...`). Sandbox only. Recorded results: `data/gp-field-checks.ts`.
 
+Testing guide (Test cases sub-tab): the partner-facing *GP SDK Testing Guide* lives in `data/gp-guide/guide.json` (source of truth; never put ticket IDs or internal notes in it) and round-trips with the Google Sheet via `npm run gp:guide:export` / `gp:guide:import`. Automated checks in `src/gp/guide/checks.ts` compare the API with what each row records; they never change a status. **Partners only view:** production builds refuse every GP run/write route (`GP_RUNS` / `gpRunsRefused` in `lib/features.ts`) and show `data/gp-guide/published.json`, which a local run writes via Publish (sanitized) and James commits. See `docs/gp-capabilities.md`.
+
 ```bash
 npm run gp:capabilities -- --countries GBR,DEU --strict   # CLI/CI, exits 1 on drift
 npm run test:gp-unit                                      # pure unit tests, no network
+npm run gp:guide:export -- guide.xlsx                     # testing guide -> .xlsx (same layout as the sheet)
+npm run gp:guide:import -- guide.xlsx                     # .xlsx -> data/gp-guide/guide.json
 ```
 
 ### API Route Headers

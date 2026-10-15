@@ -66,6 +66,27 @@ It writes test values to that test employee only, and refuses to run outside the
 
 Settled results live in `data/gp-field-checks.ts` and show until a live check replaces them. Administrative details, partners sandbox, 15 Oct 2026: **not enforced** for GBR (`tax_code`, `wm_indicator`; also the GP SDK harness on 30 Sep), CAN (`qpip_exempt`; the test employee had no province, so a Quebec employee may differ), MEX (`has_imss_movement`, `integrated_daily_wage`) and SWE (`se_pension_employee_contribution_rate`).
 
+## Testing guide (Test cases)
+
+The Payroll tab opens on **Test cases**: the *Global Payroll SDK Testing Guide (BambooHR)*, one row per case (Setup, Admin onboarding, Employee onboarding, Bank details, Tokens & auth), plus Country coverage. Each row shows the guide's status, how the case is tested, when it was last checked and, where one exists, the latest automated check.
+
+- **Source of truth:** `data/gp-guide/guide.json`. It is partner-facing: no ticket IDs, tracker links or internal notes (the importer and a unit test refuse them). Track tickets in the sheet's internal tab or in Linear.
+- **Spreadsheet round trip:** `npm run gp:guide:export -- guide.xlsx` writes the same tabs and columns as the Google Sheet (status dropdown and colours included), plus *Last checked* and *How tested*. Edit it in Excel or Google Sheets, download as .xlsx, then `npm run gp:guide:import -- guide.xlsx` and review `git diff data/gp-guide/guide.json`. Tabs the guide doesn't know are ignored. **Download .xlsx** on the tab gives the same file with a *Latest automated check* column, which import ignores.
+- **Automated checks** (`src/gp/guide/checks.ts`): S7, A1, A3, A4, A5, A6, A7. Each compares the API with what the guide records: *Matches the guide* (or *Behaves as expected* for an untested row), *Differs from the guide*, *Inconclusive*, *Not run* (usually a missing test employee) or *Check failed*. A check never changes a status; update the row when one differs. A1, A3, A4 and A7 need test employees in GBR, DEU/DNK/IRL/SWE and CAN; A3 and A4 save contract details to them.
+
+### Partners view, James publishes
+
+Runs use the deployer's client credentials and write to a sandbox, so only local runs can run anything:
+
+| Build | Runs | Shows |
+|---|---|---|
+| `npm run dev` | Report, test employees, skipped-field checks, guide checks, Publish | Your last run, plus unpublished results |
+| Production (Vercel) | None. The routes return 403 (`gpRunsRefused` in `lib/features.ts`) | The published report and checks only |
+
+Set `NEXT_PUBLIC_GP_RUNS=true` to allow runs in a production build (not for a partner deploy).
+
+To publish: run the report and the guide checks locally, click **Publish** on Test cases, then commit `data/gp-guide/published.json` and deploy. The file is sanitized: no company slug, legal entities or employment IDs (request IDs stay).
+
 ## Baseline
 
 The baseline lives in `data/gp-capability-baseline.ts`. It is built from two sources:
@@ -115,6 +136,11 @@ src/gp/evaluate.ts                    Coverage, entity status, baseline verdicts
 src/gp/capability-runner.ts           Orchestration + SSE events
 src/gp/export.ts                      CSV / Markdown builders (pure)
 src/gp/cli.ts                         CLI / CI entry point
+src/gp/guide/                         Testing guide: types, sheet <-> JSON, xlsx, automated checks, publish
+data/gp-guide/guide.json              The testing guide (source of truth)
+data/gp-guide/published.json          Results partners see (written by Publish)
+components/payroll/GuideView.tsx      Test cases view
+app/api/gp/guide/*                    published (GET), xlsx (GET), run and publish (local only)
 src/gp/test-employee.ts               Create a GP test employee (entity + GP switch-on if needed)
 app/api/gp/capabilities/run/route.ts   SSE run endpoint (stores nothing)
 app/api/gp/test-employee/route.ts      Create-test-employee endpoint

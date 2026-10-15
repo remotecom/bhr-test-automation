@@ -406,6 +406,33 @@ export function useGPCapabilities() {
     await recheck(countryCode);
   }, [recheck]);
 
+  /** Show a report that was published (read-only builds), instead of this browser's last run */
+  const loadPublished = useCallback(async () => {
+    try {
+      const res = await fetch("/api/gp/guide/published", { cache: "no-store" });
+      const data = await res.json();
+      const report = data?.published?.report as GPRunReport | undefined;
+      if (!report?.countries) {
+        setState((s) => ({ ...s, status: "No country report has been published yet" }));
+        return;
+      }
+      const normalized = normalizeReport(report);
+      setState((s) => ({
+        ...s,
+        report: normalized,
+        fromLastRun: true,
+        scope: normalized.scope,
+        gatewayEnv: normalized.gatewayEnv,
+        entities: [],
+        queue: normalized.countries.map((c) => ({ code: c.code, name: c.name })),
+        results: new Map(normalized.countries.map((c) => [c.code, c])),
+        status: `Published ${new Date(data.published.publishedAt).toLocaleString()}`,
+      }));
+    } catch (err) {
+      setState((s) => ({ ...s, status: `Couldn't load published results: ${(err as Error).message}` }));
+    }
+  }, []);
+
   const loadLastRun = useCallback(() => {
     const report = loadLocal();
     if (!report) return;
@@ -445,5 +472,5 @@ export function useGPCapabilities() {
     return { ...base, countries: base.countries.map((c) => withFieldChecks(c, checks.byKey)) };
   }, [state.report, state.results, state.startedAt, state.gatewayEnv, state.scope, state.entities, state.entitiesError, checks.byKey]);
 
-  return { state, run, cancel, loadLastRun, exportable, employees, createEmployee, forgetEmployee, loadTestEmployees, checks, runFieldCheck };
+  return { state, run, cancel, loadLastRun, loadPublished, exportable, employees, createEmployee, forgetEmployee, loadTestEmployees, checks, runFieldCheck };
 }

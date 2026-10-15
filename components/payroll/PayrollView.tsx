@@ -3,7 +3,11 @@
 /**
  * Payroll (GP) tab: GP capability report.
  *
- * Layout:
+ * Two sections: Test cases (the testing guide, components/payroll/GuideView.tsx) and Countries.
+ * Builds without GP_RUNS (deployed, partner-facing) are read-only: they show the published report
+ * and results, with no run, test-employee or check controls.
+ *
+ * Countries layout:
  *   toolbar     run / scope / progress / export
  *   cards       Supported · Partial · Not supported · Needs attention (each one is a filter)
  *   employees   GP test employees: some forms can only be read (or change) for a specific employee
@@ -17,6 +21,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { checkKey, useGPCapabilities, withFieldChecks, type EmployeeState, type FieldCheckState } from "@/hooks/useGPCapabilities";
 import { getDashboardBase } from "@/components/EnvironmentSelector";
+import GuideView from "@/components/payroll/GuideView";
+import { GP_RUNS } from "@/lib/features";
 import { GP_BASELINE_COUNTRIES, GP_BASELINE_SOURCE, GP_FORMS, type GPFormDef } from "@/data/gp-capability-baseline";
 import { COVERAGE_LABEL } from "@/src/gp/evaluate";
 import { exportFilename, toMarkdown, toMatrixCSV, toTestCasesCSV } from "@/src/gp/export";
@@ -45,6 +51,8 @@ const shortId = (id: string) => id.slice(0, 8);
 
 /** Callbacks and state each row needs for test employees */
 interface EmployeeCtx {
+  /** Read-only build: hide every control that runs or writes */
+  readOnly: boolean;
   employees: EmployeeState;
   rechecking: string[];
   onCreate: (code: string) => void;
@@ -53,6 +61,7 @@ interface EmployeeCtx {
 }
 
 function CreateEmployeeButton({ code, ctx, label }: { code: string; ctx: EmployeeCtx; label?: string }) {
+  if (ctx.readOnly) return null;
   const busy = ctx.employees.creating === code;
   return (
     <button
@@ -96,6 +105,7 @@ function checkSummary(r: FieldCheckResult): { text: string; cls: string; title: 
 }
 
 function CheckButton({ code, form, ctx, label }: { code: string; form: GPFormKey; ctx: EmployeeCtx; label?: string }) {
+  if (ctx.readOnly) return null;
   const busy = ctx.checks.running === checkKey(code, form);
   return (
     <button
@@ -118,7 +128,7 @@ function SkipNote({ c, form, ctx }: { c: CountryCapability; form: GPFormKey; ctx
   const result = c.fieldChecks?.find((r) => r.form === form);
   const label = GP_FORMS.find((f) => f.key === form)?.short || form;
   const employee = ctx.employees.byCountry[c.code];
-  const canCheck = !!employee && CHECKABLE.includes(form);
+  const canCheck = !ctx.readOnly && !!employee && CHECKABLE.includes(form);
 
   if (result && (result.outcome !== "nothing_to_check" || skipped.length === 0)) {
     const s = checkSummary(result);
@@ -133,7 +143,7 @@ function SkipNote({ c, form, ctx }: { c: CountryCapability; form: GPFormKey; ctx
   const names = skipped.join(", ");
   const shown = names.length <= 24 ? names : `${skipped.length} field${skipped.length > 1 ? "s" : ""}`;
   return (
-    <span className="gp-note-warn" title={`${names}\n\n${SKIP_EXPLAIN}\n\n${canCheck ? "Click Check to find out." : CHECKABLE.includes(form) ? `Create a ${c.code} test employee to check it.` : "Only employer forms can be checked."}`}>
+    <span className="gp-note-warn" title={`${names}\n\n${SKIP_EXPLAIN}\n\n${ctx.readOnly ? "Not checked yet." : canCheck ? "Click Check to find out." : CHECKABLE.includes(form) ? `Create a ${c.code} test employee to check it.` : "Only employer forms can be checked."}`}>
       {label} skips {shown}: may be required{canCheck && <> <CheckButton code={c.code} form={form} ctx={ctx} /></>}
     </span>
   );
@@ -249,8 +259,8 @@ function Detail({ c, ctx }: { c: CountryCapability; ctx: EmployeeCtx }) {
           </div>
         ))}
         {c.baseline.note && <div className="gp-muted">{c.baseline.note}</div>}
-        <div className="gp-detail-title gp-detail-gap">Test employee</div>
-        {employee ? (
+        {!ctx.readOnly && <div className="gp-detail-title gp-detail-gap">Test employee</div>}
+        {ctx.readOnly ? null : employee ? (
           <div className="gp-muted">
             {employee.name} · <code>{employee.employmentId}</code>
             <br />
@@ -386,7 +396,9 @@ function Card({ label, value, sub, tone, active, onClick, disabled }: {
 // ---------------------------------------------------------------------------
 
 export default function PayrollView() {
-  const { state, run, cancel, loadLastRun, exportable, employees, createEmployee, forgetEmployee, loadTestEmployees, checks, runFieldCheck } = useGPCapabilities();
+  const { state, run, cancel, loadLastRun, loadPublished, exportable, employees, createEmployee, forgetEmployee, loadTestEmployees, checks, runFieldCheck } = useGPCapabilities();
+  const readOnly = !GP_RUNS;
+  const [section, setSection] = useState<"cases" | "countries">("cases");
   const { running, status, queue, results, entities, entitiesError, report, fromLastRun, rechecking } = state;
   const [scope, setScope] = useState<GPScope>("baseline");
   const [custom, setCustom] = useState("GBR, DEU, ESP, HUN, LVA");
@@ -395,9 +407,13 @@ export default function PayrollView() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    if (readOnly) {
+      loadPublished();
+      return;
+    }
     loadLastRun();
     loadTestEmployees();
-  }, [loadLastRun, loadTestEmployees]);
+  }, [readOnly, loadLastRun, loadPublished, loadTestEmployees]);
 
   const all = useMemo(
     () => [...results.values()].sort((a, b) => a.code.localeCompare(b.code)).map((c) => withFieldChecks(c, checks.byKey)),
@@ -448,7 +464,7 @@ export default function PayrollView() {
   };
 
   const pick = (v: View) => setView((cur) => (cur === v ? "all" : v));
-  const ctx: EmployeeCtx = { employees, rechecking, onCreate: createEmployee, checks, onCheck: runFieldCheck };
+  const ctx: EmployeeCtx = { readOnly, employees, rechecking, onCreate: createEmployee, checks, onCheck: runFieldCheck };
   // Countries a test employee makes sense for: those with GP forms in the last report, else the known GP countries
   const employeeCountries = all.length
     ? all.filter((c) => c.coverage !== "none").map((c) => ({ code: c.code, name: c.name }))
@@ -463,21 +479,41 @@ export default function PayrollView() {
           .map((e) => `${countryName(e.countryCode)} entity, GP ${e.gpEnabled ? "enabled" : "not enabled"}`)
           .join("; ");
 
+  const employmentIds = Object.fromEntries(Object.entries(employees.byCountry).map(([cc, e]) => [cc, e.employmentId]));
+  const subtabs = (
+    <div className="gp-subtabs">
+      <button className={`gp-subtab ${section === "cases" ? "gp-subtab-active" : ""}`} onClick={() => setSection("cases")}>Test cases</button>
+      <button className={`gp-subtab ${section === "countries" ? "gp-subtab-active" : ""}`} onClick={() => setSection("countries")}>Countries</button>
+    </div>
+  );
+
+  if (section === "cases") {
+    return (
+      <div className="suite-view gp-view">
+        {subtabs}
+        <GuideView runsEnabled={!readOnly} employments={employmentIds} report={exportable} />
+      </div>
+    );
+  }
+
   return (
     <div className="suite-view gp-view">
+      {subtabs}
       {/* Toolbar */}
       <div className="suite-toolbar">
-        {running ? (
+        {!readOnly && (running ? (
           <button className="btn-run-suite gp-btn-cancel" onClick={cancel}>Cancel</button>
         ) : (
           <button className="btn-run-suite" onClick={startRun}>Run GP Report</button>
+        ))}
+        {!readOnly && (
+          <select className="gp-select" value={scope} disabled={running} onChange={(e) => setScope(e.target.value as GPScope)}>
+            <option value="baseline">Known GP countries ({GP_BASELINE_COUNTRIES.length})</option>
+            <option value="all">All countries</option>
+            <option value="custom">Custom list</option>
+          </select>
         )}
-        <select className="gp-select" value={scope} disabled={running} onChange={(e) => setScope(e.target.value as GPScope)}>
-          <option value="baseline">Known GP countries ({GP_BASELINE_COUNTRIES.length})</option>
-          <option value="all">All countries</option>
-          <option value="custom">Custom list</option>
-        </select>
-        {scope === "custom" && (
+        {!readOnly && scope === "custom" && (
           <input className="gp-input" value={custom} disabled={running} onChange={(e) => setCustom(e.target.value)} placeholder="GBR, DEU, ESP" />
         )}
         {running ? (
@@ -489,7 +525,7 @@ export default function PayrollView() {
           <span className="suite-status">
             {report ? (
               <>
-                {fromLastRun ? "Last run" : "Run"} {new Date(report.timestamp).toLocaleString()} · {report.gatewayEnv === "sandbox" ? "Remote sandbox" : report.gatewayEnv === "partners" ? "Partners sandbox" : report.gatewayEnv}
+                {readOnly ? "Published results, checked" : fromLastRun ? "Last run" : "Run"} {new Date(report.timestamp).toLocaleString()} · {report.gatewayEnv === "sandbox" ? "Remote sandbox" : report.gatewayEnv === "partners" ? "Partners sandbox" : report.gatewayEnv}
               </>
             ) : status}
           </span>
@@ -525,7 +561,7 @@ export default function PayrollView() {
         />
         <div className="gp-cards-side">
           <input className="gp-input gp-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search country" />
-          <div
+          {!readOnly && <div
             className="gp-muted gp-company"
             title={
               entitiesError ||
@@ -534,25 +570,25 @@ export default function PayrollView() {
             }
           >
             {entityLine}
-          </div>
+          </div>}
         </div>
       </div>
 
 
-      <TestEmployees
+      {!readOnly && <TestEmployees
         employees={employees}
         countries={employeeCountries}
         onCreate={createEmployee}
         onForget={forgetEmployee}
         disabled={running}
         needEmployee={all.filter((c) => needsEmployee(c) && !employees.byCountry[c.code]).map((c) => c.code)}
-      />
+      />}
       {checks.error && <div className="gp-employees-msg gp-note-bad gp-check-error">{checks.error}</div>}
 
       <div className="table-wrap">
         {all.length === 0 ? (
           <div className="gp-empty">
-            {running ? "Probing countries…" : "No report yet. Choose a scope and click Run GP Report."}
+            {readOnly ? "No country report has been published yet." : running ? "Probing countries…" : "No report yet. Choose a scope and click Run GP Report."}
           </div>
         ) : (
           <>
@@ -565,12 +601,12 @@ export default function PayrollView() {
                     <th className="gp-col-forms gp-w-employer" title="Forms the employer completes. Green: published for this country. Struck through: not available. Red: the check failed.">Employer forms</th>
                     <th className="gp-col-forms gp-w-employee" title="Forms the employee completes. Green: published for this country. Struck through: not available. Red: the check failed.">Employee forms</th>
                     <th className="gp-col-notes gp-w-notes gp-hide-sm">Notes</th>
-                    <th className="gp-col-entity gp-w-entity gp-hide-md" title="GP status of the connected test company's entity in this country">Test company</th>
+                    {!readOnly && <th className="gp-col-entity gp-w-entity gp-hide-md" title="GP status of the connected test company's entity in this country">Test company</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {tableRows.length === 0 && (
-                    <tr><td colSpan={6} className="gp-empty">No countries in this view.</td></tr>
+                    <tr><td colSpan={readOnly ? 5 : 6} className="gp-empty">No countries in this view.</td></tr>
                   )}
                   {tableRows.map((c) => {
                     const open = expanded.has(c.code);
@@ -586,10 +622,10 @@ export default function PayrollView() {
                           <td className="gp-col-forms">{EMPLOYER_FORMS.map((f) => <FormPill key={f.key} def={f} p={c.forms[f.key]} />)}</td>
                           <td className="gp-col-forms">{EMPLOYEE_FORMS.map((f) => <FormPill key={f.key} def={f} p={c.forms[f.key]} />)}</td>
                           <td className="gp-col-notes gp-hide-sm"><Notes c={c} ctx={ctx} /></td>
-                          <td className="gp-col-entity gp-hide-md"><EntityCell c={c} /></td>
+                          {!readOnly && <td className="gp-col-entity gp-hide-md"><EntityCell c={c} /></td>}
                         </tr>
                         {open && (
-                          <tr className="gp-detail-row"><td colSpan={6}><Detail c={c} ctx={ctx} /></td></tr>
+                          <tr className="gp-detail-row"><td colSpan={readOnly ? 5 : 6}><Detail c={c} ctx={ctx} /></td></tr>
                         )}
                       </React.Fragment>
                     );
