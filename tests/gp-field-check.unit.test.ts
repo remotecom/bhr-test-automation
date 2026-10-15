@@ -87,6 +87,24 @@ describe("GP skipped-field check: filling the form", () => {
 
   // CAN, partners sandbox, 15 Oct 2026: sin_expiry_date "must be empty" (req 6773a203…), because a
   // pattern condition on sin was treated as holding. Only temporary-resident SINs (starting 9) expire.
+  // SWE contract details, partners sandbox, 15 Oct 2026: weekly_work_schedule "is invalid" (req d6f7269a…)
+  it("GP-F12 uses the schema's own example when no test value fits the pattern", () => {
+    const schema = {
+      type: "object",
+      required: ["weekly_work_schedule"],
+      properties: {
+        weekly_work_schedule: {
+          type: "string", pattern: "^\\d+(/\\d+){6}$",
+          description: "eg.: 8/8/8/8/8/0/0 it means that EE works 8 hours from Monday till Friday",
+          "x-jsf-errorMessage": { pattern: "Must have a valid format. E.g. 8/8/8/8/8/0/0" },
+        },
+      },
+    };
+    const { values, unsure } = buildFormPayload(schema, [], "SWE");
+    expect(values.weekly_work_schedule).toBe("8/8/8/8/8/0/0");
+    expect(unsure).toEqual([]);
+  });
+
   it("GP-F11 evaluates pattern conditions, so a rule keyed on the value's format stays closed", () => {
     const schema = {
       type: "object",

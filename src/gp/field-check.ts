@@ -98,6 +98,18 @@ const PATTERN_CANDIDATES = [
   "+441234567890", "GB82WEST12345698765432", "DE89370400440532013000", "2026-01-01",
 ];
 
+/**
+ * Example values a schema gives in its own text, tried before the generic candidates:
+ * "eg.: 8/8/8/8/8/0/0 it means..." or x-jsf-errorMessage "Must have a valid format. E.g. 19900101-1234"
+ */
+function examplesIn(prop: Json): string[] {
+  const texts: string[] = [];
+  if (typeof prop.description === "string") texts.push(prop.description);
+  const errs = prop["x-jsf-errorMessage"];
+  if (isObj(errs)) for (const v of Object.values(errs)) if (typeof v === "string") texts.push(v);
+  return texts.flatMap((t) => t.split(/[\s,;()"']+/)).map((w) => w.replace(/[.:]+$/, "")).filter((w) => w.length > 0);
+}
+
 function stringValue(prop: Json, path: string, unsure: string[], country?: string): string {
   const format = prop.format;
   const sample = namedSample(path.split(".").pop()!.replace("[]", ""), country);
@@ -114,7 +126,7 @@ function stringValue(prop: Json, path: string, unsure: string[], country?: strin
     } catch {
       re = null;
     }
-    const hit = re ? PATTERN_CANDIDATES.find((c) => re!.test(c)) : undefined;
+    const hit = re ? [...examplesIn(prop), ...PATTERN_CANDIDATES].find((c) => re!.test(c)) : undefined;
     if (hit) return hit;
     unsure.push(path);
   }
@@ -369,7 +381,9 @@ export async function checkSkippedFields(
   const verdict = skipped.length === 0 && interpreted.outcome === "not_enforced" ? { ...interpreted, outcome: "nothing_to_check" as const } : interpreted;
   // Dev only: the exact body and response, for writing up findings (test values, no tokens)
   if (process.env.NODE_ENV === "development") {
-    console.log(`[gp field-check] ${JSON.stringify({ countryCode: code, formKey, employmentId, skipped, status: res.status, requestId: res.requestId, sent: { [target.envelope]: values }, response: res.data })}`);
+    const props = isObj(schema.properties) ? schema.properties : {};
+    const rejectedSchema = Object.fromEntries(interpreted.otherRejected.filter((f) => f in props).map((f) => [f, props[f]]));
+    console.log(`[gp field-check] ${JSON.stringify({ countryCode: code, formKey, employmentId, skipped, status: res.status, requestId: res.requestId, sent: { [target.envelope]: values }, response: res.data, rejectedSchema })}`);
   }
   const unsureNote = unsure.length && verdict.outcome === "inconclusive" ? ` No test value matched the pattern for: ${unsure.join(", ")}.` : "";
 

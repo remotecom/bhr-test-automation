@@ -459,10 +459,10 @@ a.gp-entity-on:hover, a.gp-entity-off:hover { text-decoration: underline; }
 .gg-wrap { white-space: normal; overflow-wrap: anywhere; }
 .gg-expected { font-size: 11px; margin-top: 2px; }
 .gg-w-id { width: 56px; }
-.gg-w-status { width: 128px; }
+.gg-w-status { width: 150px; }
 .gg-w-check { width: 170px; }
 .gg-w-how { width: 150px; }
-.gg-w-date { width: 104px; }
+.gg-w-date { width: 120px; }
 .gg-w-measure { width: 32%; }
 .gg-w-count { width: 64px; }
 .gg-pill { font-size: 11px; padding: 1px 8px; border-radius: 10px; border: 1px solid; white-space: nowrap; }
