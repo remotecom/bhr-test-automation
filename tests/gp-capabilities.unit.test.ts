@@ -315,8 +315,8 @@ describe("GP test employees", () => {
       get: async (path: string) => path.endsWith("/legal-entities")
         ? { status: 200, data: { data: { legal_entities: [{ id: "e", country_code: "GBR", global_payroll_enabled: true }] } } }
         : { status: 200, data: { data: { required: [], properties: {} } } },
-      post: async () => ({ status: 422, data: { message: "Unprocessable Entity", errors: { login_email: ["is invalid"] } } }),
+      post: async () => ({ status: 422, data: { message: "Unprocessable Entity", errors: { login_email: ["is invalid"] } }, requestId: "req-42" }),
     } as unknown as RemoteClient;
-    await expect(createGPTestEmployee(client, "co-1", "GBR")).rejects.toThrow(/422.*login_email/);
+    await expect(createGPTestEmployee(client, "co-1", "GBR")).rejects.toThrow(/422.*login_email.*request ID req-42/);
   });
 });

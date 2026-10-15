@@ -17,7 +17,7 @@
  * field that has fixed options with its first option, read from global_payroll_basic_information.
  */
 
-import type { RemoteClient } from "../client";
+import type { ApiResponse, RemoteClient } from "../client";
 import { getCompanyEntities, type LegalEntity } from "../setup/entity-swap";
 import { entityCode } from "./evaluate";
 import { unwrapSchema } from "./schema-analysis";
@@ -49,9 +49,11 @@ function apiReason(data: unknown): string {
     .slice(0, 500);
 }
 
-function fail(what: string, status: number, data: unknown): never {
-  const reason = apiReason(data);
-  throw new Error(`${what} failed (${status})${reason ? `: ${reason}` : ""}`);
+function fail(what: string, res: ApiResponse<unknown>): never {
+  const reason = apiReason(res.data) || res.rawText || "";
+  // Request IDs let the API team find the failure in their logs
+  const ids = [res.requestId && `request ID ${res.requestId}`, res.cdnId && `CloudFront ID ${res.cdnId}`].filter(Boolean).join(", ");
+  throw new Error(`${what} failed (${res.status})${reason ? `: ${reason}` : ""}${ids ? ` [${ids}]` : ""}`);
 }
 
 function futureDate(days: number): string {
@@ -110,20 +112,22 @@ async function ensureGPEntity(
   if (inCountry.length > 0) {
     id = entityId(inCountry[0]);
   } else {
-    const { status, data } = await client.post<{ data: LegalEntity }>(
+    const created = await client.post<{ data: LegalEntity }>(
       `/v1/sandbox/companies/${companySlug}/legal-entities`,
       { country_code: countryCode }
     );
-    if (status !== 200 && status !== 201) fail(`Creating a ${countryCode} legal entity`, status, data);
-    id = entityId(data.data);
+    if (created.status !== 200 && created.status !== 201) fail(`Creating a ${countryCode} legal entity`, created);
+    id = entityId(created.data.data);
     if (!id) throw new Error(`Created a ${countryCode} legal entity, but the response had no ID`);
     changes.push(`Added a ${countryCode} legal entity to your test company`);
   }
 
-  const { status, data } = await client.post(
+  const activated = await client.post(
     `/v1/sandbox/companies/${companySlug}/legal-entities/${id}/activate-global-payroll`
   );
-  if (status !== 200 && status !== 201) fail(`Switching on Global Payroll for the ${countryCode} entity`, status, data);
+  if (activated.status !== 200 && activated.status !== 201) {
+    fail(`Switching on Global Payroll for the ${countryCode} entity`, activated);
+  }
   changes.push(`Switched on Global Payroll for your ${countryCode} legal entity`);
   return id;
 }
@@ -149,14 +153,14 @@ export async function createGPTestEmployee(
   const name = `GP Test ${code}`;
   const email = `gp-test+${code.toLowerCase()}-${stamp}@example.com`;
 
-  const { status, data } = await client.post<{ data: { employment: { id: string } } }>("/v1/employments", {
+  const res = await client.post<{ data: { employment: { id: string } } }>("/v1/employments", {
     type: "global_payroll_employee",
     country_code: code,
     engaged_by_legal_entity_id: legalEntityId,
     basic_information: buildBasicInformation(schema, name, email),
   });
-  if (status !== 200 && status !== 201) fail(`Creating the ${code} test employee`, status, data);
-  const employmentId = data?.data?.employment?.id;
+  if (res.status !== 200 && res.status !== 201) fail(`Creating the ${code} test employee`, res);
+  const employmentId = res.data?.data?.employment?.id;
   if (!employmentId) throw new Error("The employee was created, but the response had no employment ID");
 
   return { countryCode: code, employmentId, legalEntityId, name, email, createdAt: new Date().toISOString(), changes };
