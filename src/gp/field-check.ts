@@ -74,9 +74,18 @@ const SAMPLE_ADDRESS: Record<string, { postal_code: string; city: string; state?
   AUS: { postal_code: "2000", city: "Sydney", state: "NSW" },
 };
 
+/** Valid-format national IDs (with correct check digits), since the API validates more than the pattern */
+const SAMPLE_IDS: Record<string, Record<string, string>> = {
+  CAN: { sin: "046454286" },
+  MEX: { curp: "GOMC800101HDFRRR00", rfc: "GOMC800101AB8", ssn: "12348001012" },
+  SWE: { ssn: "19121212-1212" },
+};
+
 function namedSample(field: string, country?: string): string | undefined {
+  const id = country ? SAMPLE_IDS[country]?.[field] : undefined;
+  if (id) return id;
   const sample = country ? SAMPLE_ADDRESS[country] : undefined;
-  if (/^(postal_code|postcode|zip(_code)?)$/.test(field)) return sample?.postal_code;
+  if (/(^|_)(postal_code|postcode|zip(_code)?)$/.test(field)) return sample?.postal_code;
   if (/^city$/.test(field)) return sample?.city;
   if (/^(address|address_line_1|street)$/.test(field)) return "1 Test Street";
   return undefined;
@@ -188,6 +197,13 @@ function holds(cond: unknown, values: Json): boolean {
       if (!isObj(sub) || v === undefined) continue; // `properties` only constrains present values
       if ("const" in sub && v !== sub.const) return false;
       if (Array.isArray(sub.enum) && !sub.enum.includes(v)) return false;
+      if (typeof sub.pattern === "string" && typeof v === "string") {
+        try {
+          if (!new RegExp(sub.pattern).test(v)) return false;
+        } catch {
+          // Unparseable pattern: treat as holding, like other unfamiliar conditions
+        }
+      }
       if (isObj(sub.not) && "const" in sub.not && v === sub.not.const) return false;
       if (isObj(sub.contains) && Array.isArray(v) && "const" in sub.contains && !v.includes(sub.contains.const)) return false;
     }
@@ -345,6 +361,10 @@ export async function checkSkippedFields(
   const { values, unsure } = buildFormPayload(schema, skipped, code);
   const res: ApiResponse<unknown> = await client.put(target.path(employmentId), { [target.envelope]: values });
   const verdict = interpretSubmit(res.status, res.data, skipped, target.envelope);
+  // Dev only: the exact body and response, for writing up findings (test values, no tokens)
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[gp field-check] ${JSON.stringify({ countryCode: code, formKey, employmentId, skipped, status: res.status, requestId: res.requestId, sent: { [target.envelope]: values }, response: res.data })}`);
+  }
   const unsureNote = unsure.length && verdict.outcome === "inconclusive" ? ` No test value matched the pattern for: ${unsure.join(", ")}.` : "";
 
   return {

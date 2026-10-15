@@ -69,6 +69,34 @@ describe("GP skipped-field check: filling the form", () => {
     expect(String(values.tax_code)).toMatch(new RegExp(ADMIN.properties.tax_code.pattern));
     expect(String(values.visa_number).length).toBeGreaterThanOrEqual(20);
   });
+
+  // Rejected live in the partners sandbox, 15 Oct 2026: MEX fiscal_zip_code "Must be 5 numbers"
+  // (req 5f671715…), SWE ssn "Must have a valid format. E.g. 19900101-1234" (req b96c81c1…)
+  it("GP-F10 sends valid national IDs and postcodes for fields the API validates beyond the pattern", () => {
+    const str = { type: "string" };
+    const mex = buildFormPayload({ type: "object", required: ["fiscal_zip_code", "curp", "rfc", "ssn"], properties: { fiscal_zip_code: str, curp: str, rfc: str, ssn: str } }, [], "MEX").values;
+    expect(mex.fiscal_zip_code).toMatch(/^\d{5}$/);
+    expect(mex.curp).toMatch(/^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/);
+    expect(mex.rfc).toMatch(/^[A-Z]{4}\d{6}[A-Z0-9]{3}$/);
+    expect(mex.ssn).toMatch(/^\d{11}$/);
+    const swe = buildFormPayload({ type: "object", required: ["ssn"], properties: { ssn: str } }, [], "SWE").values;
+    expect(swe.ssn).toMatch(/^\d{8}-\d{4}$/);
+    const can = buildFormPayload({ type: "object", required: ["sin"], properties: { sin: { type: "string", pattern: "^\\d{9}$" } } }, [], "CAN").values;
+    expect(can.sin).toBe("046454286"); // Luhn-valid
+  });
+
+  // CAN, partners sandbox, 15 Oct 2026: sin_expiry_date "must be empty" (req 6773a203…), because a
+  // pattern condition on sin was treated as holding. Only temporary-resident SINs (starting 9) expire.
+  it("GP-F11 evaluates pattern conditions, so a rule keyed on the value's format stays closed", () => {
+    const schema = {
+      type: "object",
+      required: ["sin"],
+      properties: { sin: { type: "string", pattern: "^\\d{9}$" }, sin_expiry_date: { type: "string", format: "date" } },
+      allOf: [{ if: { properties: { sin: { pattern: "^9" } }, required: ["sin"] }, then: { required: ["sin_expiry_date"] }, else: { properties: { sin_expiry_date: false } } }],
+    };
+    expect(buildFormPayload(schema, [], "CAN").values).not.toHaveProperty("sin_expiry_date");
+    expect(buildFormPayload({ ...schema, properties: { ...schema.properties, sin: { const: "912345678" } } }, []).values).toHaveProperty("sin_expiry_date");
+  });
 });
 
 describe("GP skipped-field check: reading the response", () => {
@@ -144,10 +172,13 @@ describe("GP skipped-field check: end to end against a fake client", () => {
 });
 
 describe("GP skipped-field check: recorded results and export", () => {
-  it("GP-F9 the UK admin-details result from the harness is recorded as not enforced", () => {
-    const gbr = RECORDED_FIELD_CHECKS.find((r) => r.countryCode === "GBR" && r.form === "administrative_details");
-    expect(gbr).toMatchObject({ outcome: "not_enforced", skippedFields: ["tax_code", "wm_indicator"], source: "recorded" });
-    const c = { code: "GBR", fieldChecks: [gbr!] } as unknown as CountryCapability;
-    expect(fieldCheckText(c)).toEqual(["Admin: skips tax_code, wm_indicator: not enforced (200, recorded 2026-09-30)"]);
+  it("GP-F9 the admin-details results from the partners sandbox are recorded as not enforced", () => {
+    const admin = (cc: string) => RECORDED_FIELD_CHECKS.find((r) => r.countryCode === cc && r.form === "administrative_details");
+    expect(admin("GBR")).toMatchObject({ outcome: "not_enforced", skippedFields: ["tax_code", "wm_indicator"], source: "recorded" });
+    expect(admin("CAN")).toMatchObject({ outcome: "not_enforced", skippedFields: ["qpip_exempt"] });
+    expect(admin("MEX")).toMatchObject({ outcome: "not_enforced", skippedFields: ["has_imss_movement", "integrated_daily_wage"] });
+    expect(admin("SWE")).toMatchObject({ outcome: "not_enforced", skippedFields: ["se_pension_employee_contribution_rate"] });
+    const c = { code: "GBR", fieldChecks: [admin("GBR")!] } as unknown as CountryCapability;
+    expect(fieldCheckText(c)).toEqual(["Admin: skips tax_code, wm_indicator: not enforced (200, recorded 2026-10-15)"]);
   });
 });

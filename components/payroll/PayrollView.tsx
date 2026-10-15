@@ -125,7 +125,7 @@ function SkipNote({ c, form, ctx }: { c: CountryCapability; form: GPFormKey; ctx
     return (
       <span className={s.cls} title={s.title}>
         {label}: {s.text}
-        {canCheck && result.source === "recorded" && <> <CheckButton code={c.code} form={form} ctx={ctx} label="Re-check" /></>}
+        {canCheck && <> <CheckButton code={c.code} form={form} ctx={ctx} label="Re-check" /></>}
       </span>
     );
   }

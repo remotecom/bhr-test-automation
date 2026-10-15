@@ -52,7 +52,7 @@ Sandbox only. Creating an employee changes the connected company (it may add a l
 A skipped field only matters if the API still requires it. With a test employee in the country, each "skips X: may be required" note has a **Check** button:
 
 1. Read the form for that employee: `GET /v1/countries/{cc}/{form}?employment_id={id}`.
-2. Fill every field the form requires with test values (choices prefer "no" so extra sections stay closed; addresses and hours get realistic values), leaving the skipped fields out.
+2. Fill every field the form requires with test values (choices prefer "no" so extra sections stay closed; addresses, hours and national IDs such as SIN, CURP, RFC and personnummer get realistic, check-digit-valid values), leaving the skipped fields out.
 3. Submit it the way remote-flows 1.59.0 does: `PUT /v2/employments/{id}/contract-details` with `{ contract_details: {...} }`, or `PUT /v2/employments/{id}/administrative-details` with `{ administrative_details: {...} }`.
 
 | Result | Meaning |
@@ -62,7 +62,9 @@ A skipped field only matters if the API still requires it. With a test employee 
 | **inconclusive** | Rejected for a different field, usually a test value; the tooltip names it and has the request ID |
 | **no skipped fields** | That employee's version of the form doesn't skip anything |
 
-It writes test values to that test employee only, and refuses to run outside the two sandboxes. Results are kept in the browser per environment and company, and included in all exports. Checks already settled elsewhere live in `data/gp-field-checks.ts` (UK administrative details: not enforced, GP SDK harness, 30 Sep 2026) and show until a live check replaces them.
+It writes test values to that test employee only, and refuses to run outside the two sandboxes. Results are kept in the browser per environment and company, and included in all exports. Every result has a **Re-check** button, so an inconclusive check can be run again after the filler is fixed. In development, each submission's body and response are logged to the server console as `[gp field-check]`, for writing up findings.
+
+Settled results live in `data/gp-field-checks.ts` and show until a live check replaces them. Administrative details, partners sandbox, 15 Oct 2026: **not enforced** for GBR (`tax_code`, `wm_indicator`; also the GP SDK harness on 30 Sep), CAN (`qpip_exempt`; the test employee had no province, so a Quebec employee may differ), MEX (`has_imss_movement`, `integrated_daily_wage`) and SWE (`se_pension_employee_contribution_rate`).
 
 ## Baseline
 
