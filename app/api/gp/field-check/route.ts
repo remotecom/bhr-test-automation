@@ -8,6 +8,7 @@
  * Sandbox only. Writes the form's test values to that test employee; touches nothing else.
  */
 
+import { gpRunsRefused } from "@/lib/features";
 import { createClientFromToken, readRequestOverrides, requireCompany } from "@/src/client";
 import { checkSkippedFields, isCheckableForm } from "@/src/gp/field-check";
 
@@ -18,6 +19,8 @@ const EMPLOYMENT_ID = /^[A-Za-z0-9-]{8,64}$/;
 const SANDBOX_ENVS = new Set(["partners", "sandbox", "local"]);
 
 export async function POST(request: Request) {
+  const refused = gpRunsRefused();
+  if (refused) return refused;
   const { companySlug, refreshToken, gatewayEnv } = readRequestOverrides(request);
   const gate = requireCompany({ companySlug, refreshToken }, gatewayEnv);
   if (!gate.ok) return Response.json({ error: gate.error }, { status: 400 });

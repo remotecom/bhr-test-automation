@@ -7,12 +7,15 @@
  * Sandbox only. May add a legal entity in the country and switch GP on for it (see src/gp/test-employee.ts).
  */
 
+import { gpRunsRefused } from "@/lib/features";
 import { createClientFromToken, readRequestOverrides, requireCompany } from "@/src/client";
 import { createGPTestEmployee } from "@/src/gp/test-employee";
 
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
+  const refused = gpRunsRefused();
+  if (refused) return refused;
   const { companySlug, refreshToken, gatewayEnv } = readRequestOverrides(request);
   const gate = requireCompany({ companySlug, refreshToken }, gatewayEnv);
   if (!gate.ok) {

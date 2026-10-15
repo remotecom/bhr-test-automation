@@ -330,12 +330,17 @@ export function interpretSubmit(
   return { outcome: "error", enforcedFields: [], otherRejected: [], message: message || `HTTP ${status}` };
 }
 
-/** Run the check for one country, form and test employee */
+/**
+ * Run the check for one country, form and test employee.
+ * `submitAlways`: save the form even when it skips nothing (the outcome stays nothing_to_check, and
+ * httpStatus says whether the save worked). The testing guide uses this to check that a form saves.
+ */
 export async function checkSkippedFields(
   client: RemoteClient,
   countryCode: string,
   formKey: GPFormKey,
-  employmentId: string
+  employmentId: string,
+  options: { submitAlways?: boolean } = {}
 ): Promise<FieldCheckResult> {
   const code = countryCode.toUpperCase();
   const target = CHECKABLE_FORMS[formKey];
@@ -354,13 +359,14 @@ export async function checkSkippedFields(
   if (!schema) return { ...base, outcome: "error", message: "The form response had no schema" };
 
   const skipped = analyzeSchema(schema).inertRequired;
-  if (skipped.length === 0) {
+  if (skipped.length === 0 && !options.submitAlways) {
     return { ...base, outcome: "nothing_to_check", message: "This employee's version of the form doesn't skip any required fields" };
   }
 
   const { values, unsure } = buildFormPayload(schema, skipped, code);
   const res: ApiResponse<unknown> = await client.put(target.path(employmentId), { [target.envelope]: values });
-  const verdict = interpretSubmit(res.status, res.data, skipped, target.envelope);
+  const interpreted = interpretSubmit(res.status, res.data, skipped, target.envelope);
+  const verdict = skipped.length === 0 && interpreted.outcome === "not_enforced" ? { ...interpreted, outcome: "nothing_to_check" as const } : interpreted;
   // Dev only: the exact body and response, for writing up findings (test values, no tokens)
   if (process.env.NODE_ENV === "development") {
     console.log(`[gp field-check] ${JSON.stringify({ countryCode: code, formKey, employmentId, skipped, status: res.status, requestId: res.requestId, sent: { [target.envelope]: values }, response: res.data })}`);

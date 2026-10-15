@@ -8,6 +8,7 @@
  * and stores nothing on the server; the browser keeps the last report.
  */
 
+import { gpRunsRefused } from "@/lib/features";
 import { readRequestOverrides, requireCompany } from "@/src/client";
 import { runGPCapabilities } from "@/src/gp/capability-runner";
 import type { GPScope } from "@/src/gp/types";
@@ -18,6 +19,8 @@ const SCOPES: GPScope[] = ["baseline", "all", "custom"];
 const EMPLOYMENT_ID = /^[A-Za-z0-9-]{8,64}$/;
 
 export async function POST(request: Request) {
+  const refused = gpRunsRefused();
+  if (refused) return refused;
   const { companySlug, refreshToken, gatewayEnv } = readRequestOverrides(request);
   const gate = requireCompany({ companySlug, refreshToken }, gatewayEnv);
   if (!gate.ok) {

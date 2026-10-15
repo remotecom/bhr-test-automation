@@ -9,6 +9,17 @@
 import ExcelJS from "exceljs";
 import { caseGrid, cellText, guideFromSheets, type Grid } from "./sheet";
 import { GUIDE_STATUSES, GUIDE_TABS, type Guide } from "./types";
+import type { GuideCheckResult } from "./checks";
+
+/** Header of the extra column with automated results; the importer ignores it */
+export const AUTOMATED_COLUMN = "Latest automated check (not imported)";
+const OUTCOME_TEXT: Record<string, string> = {
+  as_recorded: "Matches",
+  differs: "DIFFERS",
+  inconclusive: "Inconclusive",
+  skipped: "Skipped",
+  error: "Error",
+};
 
 const NAVY = "FF1F3863";
 const STATUS_FILL: Record<string, string> = {
@@ -75,8 +86,13 @@ function styleBody(ws: ExcelJS.Worksheet, fromRow: number) {
   });
 }
 
-/** Write the guide as .xlsx. `generatedNote` is added under the title on the Overview tab. */
-export async function writeGuideXlsx(guide: Guide, generatedNote?: string): Promise<Buffer> {
+/**
+ * Write the guide as .xlsx. `generatedNote` is added under the title on the Overview tab; `checks`
+ * adds a column with each row's latest automated check.
+ */
+export async function writeGuideXlsx(guide: Guide, opts: { generatedNote?: string; checks?: GuideCheckResult[] } = {}): Promise<Buffer> {
+  const { generatedNote } = opts;
+  const checkById = new Map((opts.checks ?? []).map((c) => [c.caseId, c]));
   const wb = new ExcelJS.Workbook();
   wb.creator = "Remote API Test Lab";
 
@@ -85,7 +101,6 @@ export async function writeGuideXlsx(guide: Guide, generatedNote?: string): Prom
   ov.columns = [{ width: 25 }, { width: 88 }];
   ov.addRow([guide.title]).font = { ...FONT, size: 14, bold: true };
   ov.addRow([guide.subtitle]);
-  if (generatedNote) ov.addRow([generatedNote]).font = { ...FONT, italic: true, color: { argb: "FF666666" } };
   ov.addRow([]);
   for (const r of guide.overview) {
     const row = ov.addRow([r.label, r.url ? { text: r.value, hyperlink: r.url } : r.value]);
@@ -105,6 +120,11 @@ export async function writeGuideXlsx(guide: Guide, generatedNote?: string): Prom
   };
   for (const t of GUIDE_TABS) ov.addRow([t.title, contents[t.title] ?? ""]);
   ov.addRow(["Country Coverage", "Which countries publish the GP onboarding forms"]);
+  // Last, after the tab list: the importer ignores rows there
+  if (generatedNote) {
+    ov.addRow([]);
+    ov.addRow([generatedNote]).font = { ...FONT, italic: true, color: { argb: "FF666666" } };
+  }
   styleBody(ov, 2);
   ov.getCell("A1").font = { ...FONT, size: 14, bold: true };
   ov.mergeCells("A1:B1");
@@ -115,7 +135,16 @@ export async function writeGuideXlsx(guide: Guide, generatedNote?: string): Prom
   for (const tab of GUIDE_TABS) {
     const ws = wb.addWorksheet(tab.title, { views: [{ state: "frozen", xSplit: 2, ySplit: 1 }] });
     ws.columns = CASE_WIDTHS.map((width) => ({ width }));
-    const grid = caseGrid(guide.cases.filter((c) => c.tab === tab.key));
+    const cases = guide.cases.filter((c) => c.tab === tab.key);
+    const grid = caseGrid(cases);
+    if (checkById.size) {
+      grid[0].push(AUTOMATED_COLUMN);
+      cases.forEach((c, i) => {
+        const r = checkById.get(c.id);
+        grid[i + 1].push(r ? `${OUTCOME_TEXT[r.outcome] ?? r.outcome} (${r.checkedAt.slice(0, 10)}): ${r.summary}` : "");
+      });
+      ws.getColumn(11).width = 40;
+    }
     grid.forEach((r) => ws.addRow(r));
     styleHeader(ws.getRow(1));
     styleBody(ws, 2);
