@@ -92,6 +92,15 @@ Where it goes (`src/gp/guide/published-store.ts`):
 - **Vercel Blob (the normal setup).** Create a **private** Blob store in the Vercel project (Storage > Blob > connect to the project), which sets `BLOB_READ_WRITE_TOKEN` on the deploy, and put the same token in your local `.env`. Publish then goes live for partners straight away; each publish also keeps a dated copy in `gp-guide/history/`. Reads bypass the CDN cache.
 - **No store yet.** Publish writes `data/gp-guide/published.json`; commit and deploy it to share. The deploy also falls back to this bundled copy if the store is empty or unreadable.
 
+## Functional checks (errors and blocked steps)
+
+Guide rows A9–A17 ask what Remote returns, and whether a step is blocked, as an employer goes through GP onboarding: inviting before the forms are saved, saving the forms out of order, a missing field, an invalid option, an entity without GP, a reused email address. `src/gp/guide/flow.ts` runs each as a short scenario in GBR, with a fresh test employee per scenario, and observes every step: the status, the message, the fields named, and whether it was blocked.
+
+- **Run them** with **Run flow checks** on the Test cases view (local runs only). A full run creates about 9 GP test employees in the connected test company and sends invites to `@example.com` addresses. **Run checks** doesn't include them.
+- **Expectations** live in `data/gp-guide/functional-expectations.ts`. A step with an expectation is compared (*as recorded* or *differs*). A step without one is reported as **observed**, meaning new behaviour for a person to review.
+- **To record a behaviour:** after reviewing an observed result, add the step's expectation there, and update the row's Remote Response and Status in `guide.json`. A check never changes a status.
+- **Setup steps** (creating the employee, saving the forms a scenario needs) have to succeed. If one fails, the result is an error rather than a finding, with the request ID.
+
 ## Baseline
 
 The baseline lives in `data/gp-capability-baseline.ts`. It is built from two sources:

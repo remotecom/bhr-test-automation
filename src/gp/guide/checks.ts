@@ -5,6 +5,7 @@
  *   as_recorded    the API still behaves as the guide says (for a known issue: it still reproduces)
  *   differs        it doesn't: the row needs updating, or something regressed
  *   inconclusive   the check ran but couldn't tell (e.g. a test value was rejected)
+ *   observed       new behaviour with nothing recorded yet (functional checks: see flow.ts)
  *   skipped        a prerequisite is missing (usually a test employee in that country)
  *   error          the check couldn't run
  * A check never changes a row's status; that stays a person's call in data/gp-guide/guide.json.
@@ -19,8 +20,9 @@ import { probeGPForm } from "../../steps/gp-forms";
 import { summarizeEntities } from "../evaluate";
 import { checkSkippedFields } from "../field-check";
 import { isPublished, type FieldCheckResult } from "../types";
+import { FUNCTIONAL_CHECKS } from "./flow";
 
-export type GuideCheckOutcome = "as_recorded" | "differs" | "inconclusive" | "skipped" | "error";
+export type GuideCheckOutcome = "as_recorded" | "differs" | "observed" | "inconclusive" | "skipped" | "error";
 
 export interface GuideCheckResult {
   caseId: string;
@@ -67,7 +69,7 @@ async function saveContract(ctx: GuideCheckContext, code: string): Promise<{ lin
 
 /** The overall outcome of several lines: any difference wins, then errors, then inconclusive */
 function combine(outcomes: GuideCheckOutcome[]): GuideCheckOutcome {
-  for (const o of ["differs", "error", "inconclusive", "as_recorded"] as const) if (outcomes.includes(o)) return o;
+  for (const o of ["differs", "error", "observed", "inconclusive", "as_recorded"] as const) if (outcomes.includes(o)) return o;
   return "skipped";
 }
 
@@ -164,10 +166,15 @@ export const GUIDE_CHECKS: Record<string, { label: string; run: CheckFn }> = {
         : { outcome: "as_recorded", summary: "The API serves the administrative-details form (the SDK step itself is checked by hand)", details };
     },
   },
+  // Functional checks: error codes, messages and blocked steps (src/gp/guide/flow.ts)
+  ...FUNCTIONAL_CHECKS,
 };
 
-/** Run the checks for the given case IDs (default: all), one at a time */
-export async function runGuideChecks(ctx: GuideCheckContext, ids: string[] = Object.keys(GUIDE_CHECKS), onResult?: (r: GuideCheckResult) => void): Promise<GuideCheckResult[]> {
+/** The quick checks: everything except the functional scenarios, which create test employees */
+export const DEFAULT_CHECK_IDS = Object.keys(GUIDE_CHECKS).filter((id) => !(id in FUNCTIONAL_CHECKS));
+
+/** Run the checks for the given case IDs (default: the quick ones), one at a time */
+export async function runGuideChecks(ctx: GuideCheckContext, ids: string[] = DEFAULT_CHECK_IDS, onResult?: (r: GuideCheckResult) => void): Promise<GuideCheckResult[]> {
   const out: GuideCheckResult[] = [];
   for (const caseId of ids) {
     const check = GUIDE_CHECKS[caseId];

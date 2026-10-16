@@ -16,6 +16,7 @@ export const AUTOMATED_COLUMN = "Latest automated check (not imported)";
 const OUTCOME_TEXT: Record<string, string> = {
   as_recorded: "Matches",
   differs: "DIFFERS",
+  observed: "Observed (not recorded yet)",
   inconclusive: "Inconclusive",
   skipped: "Skipped",
   error: "Error",

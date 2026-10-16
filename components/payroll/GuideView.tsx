@@ -18,6 +18,7 @@ import { useGPGuide } from "@/hooks/useGPGuide";
 import { GUIDE_METHODS, GUIDE_STATUSES, GUIDE_TABS, type GuideCase, type GuideStatus, type GuideTabKey } from "@/src/gp/guide/types";
 import type { GuideCheckResult } from "@/src/gp/guide/checks";
 import type { GPRunReport } from "@/src/gp/types";
+import { FUNCTIONAL_CASE_IDS } from "@/data/gp-guide/functional-expectations";
 
 type TabKey = GuideTabKey | "coverage";
 
@@ -39,6 +40,8 @@ function checkBadge(c: GuideCase, r: GuideCheckResult): { text: string; cls: str
       return { text: c.status === "Untested" ? "Behaves as expected" : "Matches the guide", cls: "gg-chk-good" };
     case "differs":
       return { text: "Differs from the guide", cls: "gg-chk-bad" };
+    case "observed":
+      return { text: "Observed, not recorded yet", cls: "gg-chk-warn" };
     case "inconclusive":
       return { text: "Inconclusive", cls: "gg-chk-warn" };
     case "skipped":
@@ -143,9 +146,17 @@ export default function GuideView({ runsEnabled, employments, report }: {
               className="btn-run-suite"
               disabled={running || publishing}
               onClick={() => run(employments)}
-              title={`Runs the automated checks (${Object.keys(automated).join(", ")}) against your test company. Some save forms to your test employees.`}
+              title={`Runs the quick automated checks (${Object.keys(automated).filter((id) => !FUNCTIONAL_CASE_IDS.includes(id)).join(", ")}) against your test company. Some save forms to your test employees.`}
             >
               {running ? "Running checks…" : "Run checks"}
+            </button>
+            <button
+              className="gg-btn"
+              disabled={running || publishing}
+              onClick={() => run(employments, FUNCTIONAL_CASE_IDS)}
+              title={`Runs the flow checks (${FUNCTIONAL_CASE_IDS.join(", ")}): which errors Remote returns and when a step is blocked. Creates about 9 GP test employees in your test company and sends invites to @example.com addresses. Takes a minute or two.`}
+            >
+              Run flow checks
             </button>
             <button
               className="gg-btn"

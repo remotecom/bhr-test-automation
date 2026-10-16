@@ -2,6 +2,8 @@
  * POST /api/gp/guide/run: run the testing guide's automated checks (src/gp/guide/checks.ts).
  *
  * Body: { employments?: { GBR: "<employment id>" }, ids?: ["A1", "A3"] }
+ *   Without ids: the quick checks. The functional checks (A9-A17) only run when asked for by ID,
+ *   because they create GP test employees and send invites.
  * Headers: X-Company-Slug, X-Refresh-Token, X-Gateway-Env (same as the GP report)
  *
  * Sandbox only, and only where runs are enabled (local dev). Some checks save forms to test employees.
@@ -11,7 +13,7 @@ import { gpRunsRefused } from "@/lib/features";
 import { createClientFromToken, readRequestOverrides, requireCompany } from "@/src/client";
 import { GUIDE_CHECKS, runGuideChecks } from "@/src/gp/guide/checks";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const EMPLOYMENT_ID = /^[A-Za-z0-9-]{8,64}$/;
 const SANDBOX_ENVS = new Set(["partners", "sandbox", "local"]);

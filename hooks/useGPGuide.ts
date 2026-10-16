@@ -67,14 +67,14 @@ export function useGPGuide() {
     load();
   }, [load]);
 
-  /** Run the automated checks with the connected company and its test employees */
-  const run = useCallback(async (employments: Record<string, string>) => {
+  /** Run the automated checks with the connected company and its test employees (ids: a subset, e.g. the flow checks) */
+  const run = useCallback(async (employments: Record<string, string>, ids?: string[]) => {
     setState((s) => ({ ...s, running: true, message: undefined }));
     try {
       const res = await fetch("/api/gp/guide/run", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getCompanyHeaders(), ...getEnvironmentHeaders() },
-        body: JSON.stringify({ employments }),
+        body: JSON.stringify(ids ? { employments, ids } : { employments }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
@@ -83,11 +83,13 @@ export function useGPGuide() {
         const local = { ...s.local, ...Object.fromEntries(results.map((r) => [r.caseId, r])) };
         saveLocalChecks(local);
         const differs = results.filter((r) => r.outcome === "differs").map((r) => r.caseId);
+        const observed = results.filter((r) => r.outcome === "observed").map((r) => r.caseId);
+        const newText = observed.length ? ` New behaviour to review: ${observed.join(", ")}.` : "";
         return {
           ...s, local, running: false,
           message: differs.length
-            ? { tone: "bad", text: `Ran ${results.length} checks. Differs from the guide: ${differs.join(", ")}` }
-            : { tone: "good", text: `Ran ${results.length} checks. Nothing differs from the guide.` },
+            ? { tone: "bad", text: `Ran ${results.length} checks. Differs from the guide: ${differs.join(", ")}.${newText}` }
+            : { tone: "good", text: `Ran ${results.length} checks. Nothing differs from the guide.${newText}` },
         };
       });
     } catch (err) {
