@@ -10,7 +10,8 @@
  *   a setup step failed, or a 5xx -> error
  *
  * Scenarios that change an employee's state (save, invite) get a fresh test employee each, so
- * every run starts from the same place. A full run creates about six GP test employees in GBR.
+ * every run starts from the same place. A full run creates about nine GP test employees in GBR
+ * (A17 may create a second one with a reused email; A16 may add a legal entity without GP).
  */
 
 import type { ApiResponse, RemoteClient } from "../../client";
