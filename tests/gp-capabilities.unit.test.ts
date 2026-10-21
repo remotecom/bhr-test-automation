@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { analyzeSchema, isNameRequired, unwrapSchema } from "../src/gp/schema-analysis";
-import { classifyCoverage, entityStatusFor, evaluateBaseline, normalizeReport, summarize } from "../src/gp/evaluate";
+import { classifyCoverage, confirmAgainstCatalog, entityStatusFor, evaluateBaseline, normalizeReport, summarize } from "../src/gp/evaluate";
 import { probeGPForm } from "../src/steps/gp-forms";
 import type { RemoteClient } from "../src/client";
 import { toMarkdown, toMatrixCSV, toTestCasesCSV, TEST_GUIDE_COLUMNS } from "../src/gp/export";
@@ -106,6 +106,19 @@ describe("GP probe: forms that need an employment", () => {
     expect(p.status).toBe("requires_employment");
     expect(classifyCoverage({ contract_details: p, personal_details: avail("p") })).toBe("full");
     expect(evaluateBaseline("GBR", { contract_details: p, personal_details: avail("p", analyzeSchema({ required: ["name"], properties: {} })) }, true).verdict).toBe("match");
+  });
+
+  it("GP-U10b the catalog cross-check keeps a listed form published and marks an unlisted one unavailable", async () => {
+    const p = await probeGPForm(fakeClient(400, { message: "missing required query parameter: employment_id" }), "MLT", "global_payroll_contract_details");
+    const avail2 = avail("global_payroll_personal_details");
+    // Listed for the country: still published
+    expect(confirmAgainstCatalog({ contract_details: p, personal_details: avail2 }, ["global_payroll_contract_details"])).toEqual({
+      contract_details: expect.objectContaining({ status: "requires_employment" }),
+    });
+    // Not listed: unavailable, and coverage follows
+    const settled = { contract_details: p, ...confirmAgainstCatalog({ contract_details: p }, ["contract_details"]) };
+    expect(settled.contract_details).toMatchObject({ status: "unavailable", message: "Not listed for the country in GET /v1/countries" });
+    expect(classifyCoverage({ ...settled, personal_details: { form: "global_payroll_personal_details", status: "unavailable", httpStatus: 422 } })).toBe("none");
   });
 
   it("GP-U11 other 400s are still errors; 422 is still unavailable", async () => {

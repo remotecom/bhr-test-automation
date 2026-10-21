@@ -9,9 +9,11 @@
  *   a step with no expectation    -> observed (new behaviour for a person to review and record)
  *   a setup step failed, or a 5xx -> error
  *
- * Scenarios that change an employee's state (save, invite) get a fresh test employee each, so
- * every run starts from the same place. A full run creates about nine GP test employees in GBR
- * (A17 may create a second one with a reused email; A16 may add a legal entity without GP).
+ * Scenarios that change an employee's state (save, invite) start from an employee no other scenario
+ * has changed. To keep the count down, a run shares employees where that holds: one whose every step
+ * Remote refused (A9's invite, A15's save) goes back to a pool for the next scenario, A12 repeats
+ * A11's invite, and A17 reuses an email from the run. A full run creates about six GP test employees
+ * in GBR (A16 may add a legal entity without GP). Each result notes any employee it reused.
  */
 
 import type { ApiResponse, RemoteClient } from "../../client";
@@ -100,21 +102,59 @@ function describe(obs: StepObservation, verdict: StepVerdict, exp?: StepExpectat
   return `${obs.label}: ${what}${msg}${flag}`;
 }
 
+type Employee = { id: string; email: string; legalEntityId: string };
+
+/** Test employees shared by the scenarios of one run (one runGuideChecks call shares one context) */
+interface RunPool {
+  /** Created in this run and unchanged: Remote refused every step taken on them */
+  untouched: (Employee & { from: string })[];
+  /** Employer steps complete and invited once (A11), for A12's repeat invite */
+  invited?: Employee & { from: string };
+  /** Every employee this run created */
+  made: Employee[];
+}
+const pools = new WeakMap<GuideCheckContext, RunPool>();
+function poolFor(ctx: GuideCheckContext): RunPool {
+  let pool = pools.get(ctx);
+  if (!pool) pools.set(ctx, (pool = { untouched: [], made: [] }));
+  return pool;
+}
+
 /** Collects observations and notes for one scenario */
 class Runner {
   observations: StepObservation[] = [];
   notes: string[] = [];
-  constructor(readonly ctx: GuideCheckContext) {}
+  constructor(readonly ctx: GuideCheckContext, readonly caseId: string) {}
 
   get client(): RemoteClient {
     return this.ctx.client;
   }
 
-  /** A new GP test employee in the flow country (setup: failures abort the scenario) */
-  async employee(code = FLOW_COUNTRY): Promise<{ id: string; email: string; legalEntityId: string }> {
-    const e = await createGPTestEmployee(this.client, this.ctx.companySlug, code);
+  get pool(): RunPool {
+    return poolFor(this.ctx);
+  }
+
+  /**
+   * A GP test employee in the flow country that no scenario has changed: an untouched one from this
+   * run if there is one, else a new one (setup: failures abort the scenario). A different start date
+   * always gets a new one.
+   */
+  async employee(code = FLOW_COUNTRY, opts: { startInDays?: number } = {}): Promise<Employee> {
+    const reuse = code === FLOW_COUNTRY && opts.startInDays === undefined ? this.pool.untouched.shift() : undefined;
+    if (reuse) {
+      this.notes.push(`Reused the test employee from ${reuse.from}: Remote refused every step taken on it there`);
+      return { id: reuse.id, email: reuse.email, legalEntityId: reuse.legalEntityId };
+    }
+    const e = await createGPTestEmployee(this.client, this.ctx.companySlug, code, opts);
     if (e.changes.length) this.notes.push(`Setup: ${e.changes.join("; ")}`);
-    return { id: e.employmentId, email: e.email, legalEntityId: e.legalEntityId };
+    const made = { id: e.employmentId, email: e.email, legalEntityId: e.legalEntityId };
+    this.pool.made.push(made);
+    return made;
+  }
+
+  /** Hand an employee to a later scenario when `step` was refused (a refused step changes nothing) */
+  releaseIfRefused(e: Employee, step: StepObservation): void {
+    if (step.blocked) this.pool.untouched.push({ ...e, from: this.caseId });
   }
 
   /**
@@ -211,7 +251,7 @@ export function summarizeScenario(caseId: string, main: string, run: { observati
 type Scenario = (r: Runner) => Promise<void>;
 
 async function runScenario(ctx: GuideCheckContext, caseId: string, main: string, scenario: Scenario) {
-  const r = new Runner(ctx);
+  const r = new Runner(ctx, caseId);
   try {
     await scenario(r);
   } catch (err) {
@@ -251,8 +291,9 @@ export const FUNCTIONAL_CHECKS: Record<string, { label: string; run: (ctx: Guide
     label: `Creates a ${FLOW_COUNTRY} test employee and invites them before any form is saved`,
     run: (ctx) => runScenario(ctx, "A9", "invite_without_forms", async (r) => {
       const e = await r.employee();
-      await r.invite("invite_without_forms", "Invite with no forms saved", e.id);
+      const invite = await r.invite("invite_without_forms", "Invite with no forms saved", e.id);
       await r.steps(e.id, "after the invite");
+      r.releaseIfRefused(e, invite);
     }),
   },
   A10: {
@@ -271,13 +312,22 @@ export const FUNCTIONAL_CHECKS: Record<string, { label: string; run: (ctx: Guide
       await r.save("contract_details", "Contract details", CONTRACT, e.id);
       await r.save("administrative_details", "Administrative details", ADMIN, e.id);
       await r.steps(e.id, "before the invite");
-      await r.invite("invite_after_contract_and_admin", "Invite after contract and administrative details", e.id);
+      const invite = await r.invite("invite_after_contract_and_admin", "Invite after contract and administrative details", e.id);
       await r.steps(e.id, "after the invite");
+      if (!invite.blocked && invite.status < 300) r.pool.invited = { ...e, from: "A11" };
     }),
   },
   A12: {
     label: `Completes the employer steps for a ${FLOW_COUNTRY} test employee, invites, then invites again`,
     run: (ctx) => runScenario(ctx, "A12", "invite_again", async (r) => {
+      // A11's employee has already had its first invite: only the repeat is left to do
+      const done = r.pool.invited;
+      if (done) {
+        r.pool.invited = undefined;
+        r.notes.push(`Reused the invited test employee from ${done.from} for the second invite`);
+        await r.invite("invite_again", "Second invite", done.id);
+        return;
+      }
       const e = await r.employee();
       await r.save("contract_details", "Contract details", CONTRACT, e.id);
       await r.save("administrative_details", "Administrative details", ADMIN, e.id);
@@ -308,6 +358,11 @@ export const FUNCTIONAL_CHECKS: Record<string, { label: string; run: (ctx: Guide
       });
       const obs = r.observations[r.observations.length - 1];
       if (obs?.target) r.notes.push(`Left out: ${obs.target}`);
+      // Accepted anyway: does Remote catch the gap later, at the invite?
+      if (obs && !obs.blocked && obs.status < 300) {
+        await r.invite("invite_after_incomplete_contract", "Invite after the incomplete contract details", e.id);
+        await r.steps(e.id, "after the invite");
+      }
     }),
   },
   A15: {
@@ -321,6 +376,7 @@ export const FUNCTIONAL_CHECKS: Record<string, { label: string; run: (ctx: Guide
       });
       const obs = r.observations[r.observations.length - 1];
       if (obs?.target) r.notes.push(`Changed: ${obs.target} = "not_a_valid_option"`);
+      if (obs) r.releaseIfRefused(e, obs);
     }),
   },
   A16: {
@@ -335,8 +391,20 @@ export const FUNCTIONAL_CHECKS: Record<string, { label: string; run: (ctx: Guide
   A17: {
     label: `Creates a ${FLOW_COUNTRY} test employee, then another with the same email address`,
     run: (ctx) => runScenario(ctx, "A17", "create_with_used_email", async (r) => {
-      const e = await r.employee();
+      // Any employee this run made has an email in use; create one only if the run made none
+      const made = r.pool.made[0];
+      if (made) r.notes.push("Reused the email of a test employee created earlier in this run");
+      const e = made ?? (await r.employee());
       await r.createEmployment("create_with_used_email", "Second GP employee with the same email", FLOW_COUNTRY, e.legalEntityId, e.email);
+    }),
+  },
+  A18: {
+    label: `Creates a ${FLOW_COUNTRY} test employee starting tomorrow, saves contract details, then invites`,
+    run: (ctx) => runScenario(ctx, "A18", "invite_near_start_date", async (r) => {
+      // Tomorrow is always less than 2 working days away; contract details are saved so A9's rule doesn't refuse first
+      const e = await r.employee(FLOW_COUNTRY, { startInDays: 1 });
+      await r.save("contract_details", "Contract details", CONTRACT, e.id);
+      await r.invite("invite_near_start_date", "Invite with a start date tomorrow", e.id);
     }),
   },
 };

@@ -182,7 +182,7 @@ function FormPill({ def, p }: { def: GPFormDef; p?: FormProbe }) {
     }
     case "requires_employment":
       return (
-        <span className="gp-pill gp-pill-on gp-pill-dashed" title={`${base}\nPublished, but the form can only be read for a specific employee. Create a test employee in this country to see it.`}>
+        <span className="gp-pill gp-pill-on gp-pill-dashed" title={`${base}\nPublished (listed for the country in GET /v1/countries), but the form can only be read for an employee in this country. Create a test employee here to see it.`}>
           {def.short}
         </span>
       );

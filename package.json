@@ -12,7 +12,7 @@
     "test:cor-ir35": "vitest run tests/cor-ir35-path.test.ts",
     "test:eor": "vitest run tests/eor-fallback-path.test.ts",
     "test:readonly": "vitest run tests/read-only.test.ts",
-    "test:gp-unit": "vitest run tests/gp-capabilities.unit.test.ts tests/gp-field-check.unit.test.ts tests/gp-guide.unit.test.ts tests/gp-published-store.unit.test.ts tests/gp-guide-flow.unit.test.ts",
+    "test:gp-unit": "vitest run tests/gp-capabilities.unit.test.ts tests/gp-field-check.unit.test.ts tests/gp-guide.unit.test.ts tests/gp-published-store.unit.test.ts tests/gp-guide-flow.unit.test.ts tests/gp-guide-tokens.unit.test.ts",
     "test:company-unit": "vitest run tests/company-create.unit.test.ts",
     "gp:capabilities": "npx tsx src/gp/cli.ts",
     "env:sync": "node scripts/env-sync.mjs",

@@ -10,7 +10,8 @@ export type { GPFormKey };
  * available           = 200 with a schema
  * requires_employment = 400 "missing required query parameter: employment_id". The form is published
  *                       for the country (unsupported countries get 422 first), but its schema can only
- *                       be read for a specific employment. Counts as published.
+ *                       be read for an employee in that country. Counts as published. The report also
+ *                       checks it against GET /v1/countries (confirmAgainstCatalog).
  * unavailable         = 404/422 "Form not available"
  * error               = anything else
  */
@@ -78,6 +79,8 @@ export interface CountryCapability {
     eorOnboarding?: boolean;
     /** global_payroll_* names listed in the country's supported_json_schemas */
     gpSchemasAdvertised: string[];
+    /** The country's global_payroll_supported flag in GET /v1/countries (reported since 9 Oct) */
+    gpSupported?: boolean;
   };
   baseline: { verdict: BaselineVerdict; checks: BaselineCheck[]; note?: string };
   durationMs: number;

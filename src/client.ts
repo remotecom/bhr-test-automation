@@ -8,6 +8,8 @@
  * The refresh_token is preferred when available because it gives company-scoped access.
  */
 
+import { createHmac } from "node:crypto";
+
 const ENVIRONMENTS: Record<string, string> = {
   local: "http://localhost:4000/api/eor",
   sandbox: "https://gateway.remote-sandbox.com",
@@ -171,6 +173,53 @@ export class RemoteClient {
   async delete<T = unknown>(path: string) {
     return this.request<T>("DELETE", path);
   }
+
+  /**
+   * Request an assertion token (jwt-bearer grant), as a partner's server would: an HS256 JWT signed
+   * with the client secret, `scope` in both the JWT and the body, Basic auth. Nothing is cached and
+   * the token itself is never returned or logged, only the status and Remote's error fields.
+   *
+   * `signWith` / `sendWith` replace the secret used to sign the JWT / in the Basic auth header, so
+   * the token checks can test a wrong or rotated secret.
+   */
+  async assertionGrant(
+    sub: string,
+    scope: string,
+    opts: { signWith?: string; sendWith?: string } = {}
+  ): Promise<ApiResponse<{ error?: string; error_description?: string; scope?: string }>> {
+    const now = Math.floor(Date.now() / 1000);
+    const assertion = signHS256(
+      { iss: this.config.clientId, sub, aud: `${this.baseUrl}/auth`, scope, iat: now, exp: now + 5 * 60 },
+      opts.signWith ?? this.config.clientSecret
+    );
+    const basic = Buffer.from(`${this.config.clientId}:${opts.sendWith ?? this.config.clientSecret}`).toString("base64");
+    const res = await fetch(this.url("/auth/oauth2/token"), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Basic ${basic}` },
+      body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion, scope }),
+    });
+    const rawText = await res.text().catch(() => "");
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      // not JSON: kept in rawText below
+    }
+    const data = { error: parsed.error as string | undefined, error_description: parsed.error_description as string | undefined, scope: parsed.scope as string | undefined };
+    const result: ApiResponse<typeof data> = { status: res.status, data };
+    if (res.status >= 400) {
+      result.requestId = res.headers.get("x-request-id") || undefined;
+      if (!parsed.error && rawText) result.rawText = rawText.slice(0, 500);
+    }
+    return result;
+  }
+}
+
+/** HS256 JWT: base64url header and payload, HMAC-SHA256 over both with the secret */
+function signHS256(payload: Record<string, unknown>, secret: string): string {
+  const b64url = (s: string | Buffer) => Buffer.from(s).toString("base64url");
+  const head = `${b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }))}.${b64url(JSON.stringify(payload))}`;
+  return `${head}.${createHmac("sha256", secret).update(head).digest("base64url")}`;
 }
 
 /** Get the company slug for the given environment */

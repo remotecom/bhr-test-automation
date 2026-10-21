@@ -28,6 +28,7 @@ import { probeGPForm } from "../steps/gp-forms";
 import { isNameRequired } from "./schema-analysis";
 import {
   classifyCoverage,
+  confirmAgainstCatalog,
   entityStatusFor,
   evaluateBaseline,
   summarizeEntities,
@@ -106,12 +107,15 @@ async function probeCountry(
     forms[def.key] = await probeGPForm(client, code, def.form, { employmentId: forEmployee });
   }
 
+  const supported = Array.isArray(country?.supported_json_schemas) ? country!.supported_json_schemas : [];
+
+  // Cross-check "published, needs an employment" against the country catalog
+  if (country) Object.assign(forms, confirmAgainstCatalog(forms, supported));
+
   const nameRequired =
     forms.personal_details?.status === "available"
       ? isNameRequired(forms.personal_details.analysis)
       : null;
-
-  const supported = Array.isArray(country?.supported_json_schemas) ? country!.supported_json_schemas : [];
 
   return {
     code,
@@ -124,6 +128,7 @@ async function probeCountry(
     catalog: {
       inCatalog: !!country,
       eorOnboarding: country?.eor_onboarding,
+      gpSupported: typeof country?.global_payroll_supported === "boolean" ? country.global_payroll_supported : undefined,
       gpSchemasAdvertised: supported.filter((s) => typeof s === "string" && s.startsWith("global_payroll")),
     },
     baseline: evaluateBaseline(code, forms, nameRequired),

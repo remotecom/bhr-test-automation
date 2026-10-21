@@ -70,8 +70,9 @@ export async function probeGPForm(
         };
       }
 
-      // Remote sandbox: contract details needs an employment. Only published forms get this far
-      // (unsupported countries return 422 before the parameter check), so treat it as published.
+      // Contract details needs an employment. Only published forms get this far (unsupported
+      // countries return 422 before the parameter check), so treat it as published. The report also
+      // checks it against GET /v1/countries (src/gp/capability-runner.ts).
       const msg = extractMessage(data) || "";
       if (status === 400 && /employment_id/i.test(msg) && !opts.employmentId) {
         return {

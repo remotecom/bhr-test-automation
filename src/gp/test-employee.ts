@@ -75,8 +75,11 @@ function firstOption(prop: unknown): unknown {
   return undefined;
 }
 
-/** basic_information for a test employee, filled out against the country's schema */
-export function buildBasicInformation(schema: Json | null, name: string, email: string): Json {
+/**
+ * basic_information for a test employee, filled out against the country's schema. The start date is
+ * 30 days out by default, well clear of the invite's "at least 2 working days from today" rule.
+ */
+export function buildBasicInformation(schema: Json | null, name: string, email: string, startInDays = 30): Json {
   // The schema's login fields only: sending the older `email` alongside them returns 422 "email is not accepted"
   const info: Json = {
     name,
@@ -84,7 +87,7 @@ export function buildBasicInformation(schema: Json | null, name: string, email: 
     login_email: "personal",
     job_title: "Software Engineer",
     has_seniority_date: "no",
-    provisional_start_date: futureDate(30),
+    provisional_start_date: futureDate(startInDays),
   };
   const props = (schema?.properties as Json | undefined) || {};
   const required = Array.isArray(schema?.required) ? (schema!.required as string[]) : [];
@@ -137,17 +140,19 @@ let counter = 0;
 export async function createGPTestEmployee(
   client: RemoteClient,
   companySlug: string,
-  countryCode: string
+  countryCode: string,
+  opts: { startInDays?: number } = {}
 ): Promise<GPTestEmployee> {
   const code = countryCode.toUpperCase();
   const changes: string[] = [];
-  const legalEntityId = await ensureGPEntity(client, companySlug, code, changes);
 
+  // Check the country first, so an unsupported one doesn't leave a new or GP-enabled legal entity behind
   const schemaRes = await client.get(`/v1/countries/${code}/global_payroll_basic_information`);
   if (schemaRes.status === 422 || schemaRes.status === 404) {
     throw new Error(`${code} has no Global Payroll basic information form, so GP employees can't be created there`);
   }
   const schema = schemaRes.status === 200 ? unwrapSchema(schemaRes.data) : null;
+  const legalEntityId = await ensureGPEntity(client, companySlug, code, changes);
 
   const stamp = `${Date.now()}.${++counter}`;
   const name = `GP Test ${code}`;
@@ -157,7 +162,7 @@ export async function createGPTestEmployee(
     type: "global_payroll_employee",
     country_code: code,
     engaged_by_legal_entity_id: legalEntityId,
-    basic_information: buildBasicInformation(schema, name, email),
+    basic_information: buildBasicInformation(schema, name, email, opts.startInDays),
   });
   if (res.status !== 200 && res.status !== 201) fail(`Creating the ${code} test employee`, res);
   const employmentId = res.data?.data?.employment?.id;

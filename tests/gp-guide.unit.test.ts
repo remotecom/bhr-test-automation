@@ -136,17 +136,41 @@ describe("GP testing guide: automated checks against a fake client", () => {
   });
 
   it("GP-G11 compares with what the guide records: matches, differs, or skipped without a test employee", async () => {
-    const unavailable = { status: 422, data: { message: "Form not available for requested country" } };
     const ctx = (client: RemoteClient) => ({ client, companySlug: "co", employments: {} });
-    const [a5, a1] = await runGuideChecks(ctx(fake({ "LVA/global_payroll_contract_details": unavailable })), ["A5", "A1"]);
-    expect(a5).toMatchObject({ caseId: "A5", outcome: "as_recorded" });
+    const needsEmployee = { status: 400, data: { message: "missing required query parameter: employment_id" } };
+    const unavailable = { status: 422, data: { message: "Form not available for requested country" } };
+    /** GET /v1/countries with MLT and HUN as recorded, plus per-form replies */
+    const catalog = (countries: unknown[], forms: Record<string, { status: number; data: unknown }> = {}) =>
+      ({
+        get: async (path: string) => {
+          if (path === "/v1/countries") return { status: 200, data: { data: countries } };
+          const hit = Object.entries(forms).find(([k]) => path.includes(k));
+          return hit ? hit[1] : needsEmployee;
+        },
+      }) as unknown as RemoteClient;
+    const MLT = { code: "MLT", name: "Malta", global_payroll_supported: false, supported_json_schemas: ["contract_details"] };
+    const HUN = { code: "HUN", name: "Hungary", global_payroll_supported: false, supported_json_schemas: ["global_payroll_contract_details", "global_payroll_administrative_details"] };
+    const asRecorded = catalog([MLT, HUN], { "MLT/global_payroll_contract_details": unavailable, "HUN/global_payroll_personal_details": unavailable });
+
+    const [a5, a6, a1] = await runGuideChecks(ctx(asRecorded), ["A5", "A6", "A1"]);
+    expect(a5).toMatchObject({ caseId: "A5", outcome: "as_recorded", summary: "MLT: global_payroll_supported false, no GP forms listed, form 422" });
+    expect(a5.details).toContain("GET MLT/global_payroll_contract_details: 422 Form not available for requested country");
+
+    // The form answering 400 (it exists, needs an employee) is a change even if the catalog still says no
+    const [c5] = await runGuideChecks(ctx(catalog([MLT, HUN])), ["A5"]);
+    expect(c5).toMatchObject({ outcome: "differs", summary: "MLT's contract-details form now returns 400 (requires_employment)" });
+    expect(a6).toMatchObject({ caseId: "A6", outcome: "as_recorded" });
     expect(a1).toMatchObject({ caseId: "A1", outcome: "skipped", summary: "Needs a GBR test employee" });
 
-    const [a6] = await runGuideChecks(ctx(fake({
-      "HUN/global_payroll_contract_details": { status: 400, data: { message: "missing required query parameter: employment_id" } },
-      "HUN/global_payroll_personal_details": { status: 200, data: { data: { schema: { type: "object", properties: {} } } } },
-    })), ["A6"]);
-    expect(a6).toMatchObject({ outcome: "differs", summary: "HUN now publishes the personal-details form too" });
+    // MLT gains GP; HUN gains the personal-details form
+    const changed = catalog(
+      [{ ...MLT, global_payroll_supported: true, supported_json_schemas: ["global_payroll_contract_details", "global_payroll_personal_details"] },
+       { ...HUN, supported_json_schemas: [...HUN.supported_json_schemas, "global_payroll_personal_details"] }],
+      { "HUN/global_payroll_personal_details": { status: 200, data: { data: { schema: { type: "object", properties: {} } } } } }
+    );
+    const [b5, b6] = await runGuideChecks(ctx(changed), ["A5", "A6"]);
+    expect(b5).toMatchObject({ outcome: "differs", summary: "MLT now supports GP in GET /v1/countries" });
+    expect(b6).toMatchObject({ outcome: "differs", summary: "HUN now publishes the personal-details form too" });
   });
 
   it("GP-G12 a failing check reports an error instead of stopping the run", async () => {

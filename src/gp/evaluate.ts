@@ -30,6 +30,26 @@ export function classifyCoverage(forms: Partial<Record<GPFormKey, FormProbe>>): 
   return "none";
 }
 
+/**
+ * Cross-check forms the probe could only answer with 400 "missing employment_id" (read as published,
+ * since unsupported countries get 422 first) against the country's supported_json_schemas in
+ * GET /v1/countries: listed stays published, not listed is unavailable. A safety net in case Remote
+ * ever checks the parameter before the country.
+ */
+export function confirmAgainstCatalog(
+  forms: Partial<Record<GPFormKey, FormProbe>>,
+  supportedSchemas: string[]
+): Partial<Record<GPFormKey, FormProbe>> {
+  const out: Partial<Record<GPFormKey, FormProbe>> = {};
+  for (const [key, p] of Object.entries(forms) as [GPFormKey, FormProbe][]) {
+    if (p?.status !== "requires_employment") continue;
+    out[key] = supportedSchemas.includes(p.form)
+      ? { ...p, message: "Published (listed for the country in GET /v1/countries); schema only readable for an employee in this country" }
+      : { ...p, status: "unavailable", message: "Not listed for the country in GET /v1/countries" };
+  }
+  return out;
+}
+
 export const COVERAGE_LABEL: Record<GPCoverage, string> = {
   full: "Full (employer + employee)",
   employer_only: "Employer only",

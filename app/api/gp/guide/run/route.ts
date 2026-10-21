@@ -2,7 +2,7 @@
  * POST /api/gp/guide/run: run the testing guide's automated checks (src/gp/guide/checks.ts).
  *
  * Body: { employments?: { GBR: "<employment id>" }, ids?: ["A1", "A3"] }
- *   Without ids: the quick checks. The functional checks (A9-A17) only run when asked for by ID,
+ *   Without ids: the quick checks. The functional checks (A9-A18) only run when asked for by ID,
  *   because they create GP test employees and send invites.
  * Headers: X-Company-Slug, X-Refresh-Token, X-Gateway-Env (same as the GP report)
  *

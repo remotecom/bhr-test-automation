@@ -16,6 +16,8 @@ export interface Country {
   eor_onboarding: boolean;
   contractor_products_available: string[];
   supported_json_schemas: string[];
+  /** Global Payroll available in the country (reported since 9 Oct 2026) */
+  global_payroll_supported?: boolean;
   country_subdivisions: Array<{ code: string; name: string; subdivision_type: string }>;
   [key: string]: unknown;
 }

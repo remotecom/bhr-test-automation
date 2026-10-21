@@ -16,11 +16,13 @@
 
 import type { RemoteClient } from "../../client";
 import { getCompanyEntities } from "../../setup/entity-swap";
+import { getCountries } from "../../steps/countries";
 import { probeGPForm } from "../../steps/gp-forms";
 import { summarizeEntities } from "../evaluate";
 import { checkSkippedFields } from "../field-check";
 import { isPublished, type FieldCheckResult } from "../types";
 import { FUNCTIONAL_CHECKS } from "./flow";
+import { TOKEN_CHECKS } from "./token-checks";
 
 export type GuideCheckOutcome = "as_recorded" | "differs" | "observed" | "inconclusive" | "skipped" | "error";
 
@@ -66,6 +68,18 @@ async function saveContract(ctx: GuideCheckContext, code: string): Promise<{ lin
   }
   return { line: `${code}: ${r.httpStatus ?? "error"} ${r.message ?? ""}`.trim(), outcome: "error", requestId: r.requestId };
 }
+
+/** A country's GP flags from GET /v1/countries: is GP supported, and which GP forms it lists */
+async function gpCatalog(ctx: GuideCheckContext, code: string): Promise<{ supported?: boolean; forms: string[] } | undefined> {
+  const country = (await getCountries(ctx.client)).find((c) => c.code.toUpperCase() === code);
+  if (!country) return undefined;
+  const forms = (country.supported_json_schemas || []).filter((f) => f.startsWith("global_payroll_"));
+  return { supported: country.global_payroll_supported, forms };
+}
+
+/** Country A5 uses as its example of a country without GP */
+export const NO_GP_EXAMPLE = "MLT";
+
 
 /** The overall outcome of several lines: any difference wins, then errors, then inconclusive */
 function combine(outcomes: GuideCheckOutcome[]): GuideCheckOutcome {
@@ -124,27 +138,41 @@ export const GUIDE_CHECKS: Record<string, { label: string; run: CheckFn }> = {
     },
   },
   A5: {
-    label: "Reads LVA's contract-details form",
+    label: `Reads ${NO_GP_EXAMPLE} in GET /v1/countries: GP support flag and GP forms listed`,
     async run(ctx) {
-      const p = await probeGPForm(ctx.client, "LVA", "global_payroll_contract_details");
-      if (p.status === "error") return { outcome: "error", summary: `Reading LVA's form failed: ${p.httpStatus ?? ""} ${p.message ?? ""}`.trim(), details: [] };
-      return p.status === "unavailable"
-        ? { outcome: "as_recorded", summary: `LVA: ${p.httpStatus} ${p.message ?? "Form not available"}`.trim(), details: [] }
-        : { outcome: "differs", summary: `LVA contract details now returns ${p.httpStatus} (${p.status})`, details: [p.message ?? ""].filter(Boolean) };
+      const cat = await gpCatalog(ctx, NO_GP_EXAMPLE);
+      if (!cat) return { outcome: "error", summary: `${NO_GP_EXAMPLE} isn't in GET /v1/countries`, details: [] };
+      // The form itself: a country without it gets 422 (one with it gets 400, needing an employee there)
+      const p = await probeGPForm(ctx.client, NO_GP_EXAMPLE, "global_payroll_contract_details");
+      if (p.status === "error") return { outcome: "error", summary: `Reading ${NO_GP_EXAMPLE}'s form failed: ${p.httpStatus ?? ""} ${p.message ?? ""}`.trim(), details: [] };
+      const details = [
+        `global_payroll_supported: ${cat.supported ?? "not returned"}`,
+        `GP forms in supported_json_schemas: ${cat.forms.length ? cat.forms.join(", ") : "none"}`,
+        `GET ${NO_GP_EXAMPLE}/global_payroll_contract_details: ${p.httpStatus} ${p.status === "requires_employment" ? "missing employment_id (the form exists; it needs an employee in the country)" : p.message ?? ""}`.trim(),
+      ];
+      return cat.supported === false && cat.forms.length === 0 && p.status === "unavailable"
+        ? { outcome: "as_recorded", summary: `${NO_GP_EXAMPLE}: global_payroll_supported false, no GP forms listed, form ${p.httpStatus}`, details }
+        : { outcome: "differs", summary: cat.supported || cat.forms.length ? `${NO_GP_EXAMPLE} now ${cat.supported ? "supports GP" : "lists GP forms"} in GET /v1/countries` : `${NO_GP_EXAMPLE}'s contract-details form now returns ${p.httpStatus} (${p.status})`, details };
     },
   },
   A6: {
-    label: "Reads HUN's contract-details and personal-details forms",
+    label: "Reads HUN in GET /v1/countries, and HUN's personal-details form",
     async run(ctx) {
-      const contract = await probeGPForm(ctx.client, "HUN", "global_payroll_contract_details");
+      const cat = await gpCatalog(ctx, "HUN");
+      if (!cat) return { outcome: "error", summary: "HUN isn't in GET /v1/countries", details: [] };
       const personal = await probeGPForm(ctx.client, "HUN", "global_payroll_personal_details");
-      const failed = [contract, personal].find((p) => p.status === "error");
-      if (failed) return { outcome: "error", summary: `Reading ${failed.form} failed: ${failed.httpStatus ?? ""} ${failed.message ?? ""}`.trim(), details: [] };
-      const details = [`Contract details: ${contract.httpStatus} (${isPublished(contract.status) ? "published" : contract.status})`, `Personal details: ${personal.httpStatus} (${isPublished(personal.status) ? "published" : personal.status})`];
-      const asRecorded = isPublished(contract.status) && personal.status === "unavailable";
+      if (personal.status === "error") return { outcome: "error", summary: `Reading ${personal.form} failed: ${personal.httpStatus ?? ""} ${personal.message ?? ""}`.trim(), details: [] };
+      const contractListed = cat.forms.includes("global_payroll_contract_details");
+      const personalListed = cat.forms.includes("global_payroll_personal_details");
+      const details = [
+        `global_payroll_supported: ${cat.supported ?? "not returned"}`,
+        `GP forms in supported_json_schemas: ${cat.forms.length ? cat.forms.join(", ") : "none"}`,
+        `Personal details: ${personal.httpStatus} (${isPublished(personal.status) ? "published" : personal.status})`,
+      ];
+      const asRecorded = contractListed && !personalListed && !isPublished(personal.status);
       return asRecorded
-        ? { outcome: "as_recorded", summary: "HUN still publishes the employer form only", details }
-        : { outcome: "differs", summary: isPublished(personal.status) ? "HUN now publishes the personal-details form too" : "HUN no longer publishes the contract-details form", details };
+        ? { outcome: "as_recorded", summary: "HUN still lists the employer form only (global_payroll_supported: " + (cat.supported ?? "not returned") + ")", details }
+        : { outcome: "differs", summary: personalListed || isPublished(personal.status) ? "HUN now publishes the personal-details form too" : "HUN no longer lists the contract-details form", details };
     },
   },
   A7: {
@@ -166,6 +194,8 @@ export const GUIDE_CHECKS: Record<string, { label: string; run: CheckFn }> = {
         : { outcome: "as_recorded", summary: "The API serves the administrative-details form (the SDK step itself is checked by hand)", details };
     },
   },
+  // Token checks: what the jwt-bearer grant returns for a wrong assertion (src/gp/guide/token-checks.ts)
+  ...TOKEN_CHECKS,
   // Functional checks: error codes, messages and blocked steps (src/gp/guide/flow.ts)
   ...FUNCTIONAL_CHECKS,
 };

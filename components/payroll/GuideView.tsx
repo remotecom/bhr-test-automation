@@ -154,7 +154,7 @@ export default function GuideView({ runsEnabled, employments, report }: {
               className="gg-btn"
               disabled={running || publishing}
               onClick={() => run(employments, FUNCTIONAL_CASE_IDS)}
-              title={`Runs the flow checks (${FUNCTIONAL_CASE_IDS.join(", ")}): which errors Remote returns and when a step is blocked. Creates about 9 GP test employees in your test company and sends invites to @example.com addresses. Takes a minute or two.`}
+              title={`Runs the flow checks (${FUNCTIONAL_CASE_IDS.join(", ")}): which errors Remote returns and when a step is blocked. Creates about 6 GP test employees in your test company (scenarios share one where Remote refused every step) and sends invites to @example.com addresses. Takes a minute or two.`}
             >
               Run flow checks
             </button>
