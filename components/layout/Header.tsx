@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import CompanySelector from "../CompanySelector";
 import EnvironmentSelector from "../EnvironmentSelector";
-import { SHOW_CM } from "@/lib/features";
+import { PARTNER_VIEW, SHOW_CM } from "@/lib/features";
 
 export const LIFECYCLE_ENABLED = false;
 
@@ -83,6 +83,8 @@ export default function Header({ status, activeTab, onTabChange, currentEntityNa
       </div>
 
       <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px 12px" }}>
+        {/* Partner view: nothing to connect, so no environment, company or connection status */}
+        {!PARTNER_VIEW && <>
         <EnvironmentSelector onEnvironmentChange={onEnvironmentChange} />
         <CompanySelector onCompanyChange={onCompanyChange} gatewayEnv={gatewayEnv} />
         {currentEntityName ? (
@@ -107,6 +109,7 @@ export default function Header({ status, activeTab, onTabChange, currentEntityNa
             {status.connected ? "Connected" : "Disconnected"}
           </span>
         </div>
+        </>}
         <button
           onClick={handleLogout}
           style={{

@@ -10,7 +10,7 @@ import PayrollView from "@/components/payroll/PayrollView";
 import ConnectCompanyBanner from "@/components/ConnectCompanyBanner";
 import { getCompanyHeaders, getCompanyOverride } from "@/components/CompanySelector";
 import { getEnvironmentHeaders, getSelectedEnv } from "@/components/EnvironmentSelector";
-import { SHOW_CM } from "@/lib/features";
+import { PARTNER_VIEW, SHOW_CM } from "@/lib/features";
 
 type Tab = "suite" | "playground" | "payroll" | "lifecycle";
 
@@ -47,6 +47,8 @@ export default function MainPage() {
   }, []);
 
   useEffect(() => {
+    // Partner view: no company, no API calls; the Payroll tab reads published results
+    if (PARTNER_VIEW) return;
     if (!hasCompany) {
       setStatus({ connected: false });
       setCountries([]);
@@ -94,7 +96,7 @@ export default function MainPage() {
         gatewayEnv={gatewayEnv}
       />
 
-      {!hasCompany ? (
+      {!hasCompany && !PARTNER_VIEW ? (
         <ConnectCompanyBanner />
       ) : (
         <>

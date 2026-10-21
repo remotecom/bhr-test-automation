@@ -27,3 +27,11 @@ export function gpRunsRefused(): Response | null {
     ? null
     : Response.json({ error: "This build only shows published results. Run GP checks locally with npm run dev." }, { status: 403 });
 }
+
+/**
+ * PARTNER_VIEW: a GP-only, view-only build (CM hidden and GP runs off), i.e. the separate
+ * partner-facing deploy. Partners don't connect a company there: the company gate, environment
+ * and company selectors and the connection status are hidden, and the Payroll tab shows the
+ * published results. Such a deploy needs no Remote API credentials.
+ */
+export const PARTNER_VIEW = !SHOW_CM && !GP_RUNS;
