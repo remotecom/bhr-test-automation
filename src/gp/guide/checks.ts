@@ -22,6 +22,7 @@ import { summarizeEntities } from "../evaluate";
 import { checkSkippedFields } from "../field-check";
 import { isPublished, type FieldCheckResult } from "../types";
 import { FUNCTIONAL_CHECKS } from "./flow";
+import { EMPLOYEE_CHECKS } from "./employee-checks";
 import { TOKEN_CHECKS } from "./token-checks";
 
 export type GuideCheckOutcome = "as_recorded" | "differs" | "observed" | "inconclusive" | "skipped" | "error";
@@ -194,6 +195,8 @@ export const GUIDE_CHECKS: Record<string, { label: string; run: CheckFn }> = {
         : { outcome: "as_recorded", summary: "The API serves the administrative-details form (the SDK step itself is checked by hand)", details };
     },
   },
+  // Employee self-onboarding: the /v1/employee/* endpoints as an invited employee (src/gp/guide/employee-checks.ts)
+  ...EMPLOYEE_CHECKS,
   // Token checks: what the jwt-bearer grant returns for a wrong assertion (src/gp/guide/token-checks.ts)
   ...TOKEN_CHECKS,
   // Functional checks: error codes, messages and blocked steps (src/gp/guide/flow.ts)

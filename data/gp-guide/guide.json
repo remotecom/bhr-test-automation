@@ -451,11 +451,11 @@
       "scenario": "Save personal details (country that requires name)",
       "input": "PayrollEmployeeOnboardingFlow, Personal details step, GBR or DEU; fill every visible field and click Save personal details",
       "expected": "\"Full legal name\" input is shown and the step saves",
-      "response": "Verified 7 Oct on remote-flows 1.59.0: \"Full legal name\" is shown, PUT /v1/employee/personal-details returns 200 and onboarding completes end to end (GBR). The field also renders on DEU, NLD, AUS and BRA. Before the fix: no name input, and Save did nothing.",
-      "notes": "Fixed in the SDK. Use remote-flows 1.59.0 or later.",
+      "response": "Verified 7 Oct on remote-flows 1.59.0: \"Full legal name\" is shown, PUT /v1/employee/personal-details returns 200 and onboarding completes end to end (GBR). The field also renders on DEU, NLD, AUS and BRA. Before the fix: no name input, and Save did nothing. Endpoint re-checked 23 Oct (GBR, partners sandbox): 422 name \"can't be blank\" without it, 200 with it.",
+      "notes": "Fixed in the SDK. Use remote-flows 1.59.0 or later. Automated check (Run checks): the endpoint behind the step, as an invited GBR employee with an employee assertion token; whether the SDK shows the field stays a manual check.",
       "status": "Verified",
-      "comments": "FRA, which does not require name, is unchanged. Endpoint behavior is the same as before: 200 with name, 422 without.",
-      "lastChecked": "2026-10-07",
+      "comments": "FRA, which does not require name, is unchanged. Endpoint behavior is the same as before: 200 with name, 422 without. Errors on the employee endpoints are nested: {\"errors\": {\"personal_details\": [{\"<field>\": [\"<message>\"]}]}}, unlike the employer endpoints' flat {\"errors\": {\"<field>\": [...]}}.",
+      "lastChecked": "2026-10-23",
       "method": "sdk"
     },
     {
@@ -476,11 +476,11 @@
       "scenario": "Nationality value format",
       "input": "Personal details with nationality \"GBR\"",
       "expected": "Accepted, or a clear error naming the expected format",
-      "response": "\"Type mismatch. Expected Array, Null but got String.\" The field expects an array of display names, e.g. [\"United Kingdom (UK)\"], not ISO codes.",
-      "notes": "Elsewhere in these flows countries are ISO alpha-3.",
+      "response": "Verified 23 Oct (GBR, partners sandbox): 422 nationality \"Type mismatch. Expected Array, Null but got String.\" The field expects an array of display names, e.g. [\"United Kingdom (UK)\"], not ISO codes.",
+      "notes": "Elsewhere in these flows countries are ISO alpha-3. Automated check (Run checks): as an invited GBR employee with an employee assertion token.",
       "status": "Verified",
-      "comments": "",
-      "lastChecked": "2026-09-30",
+      "comments": "Errors on the employee endpoints are nested: {\"errors\": {\"personal_details\": [{\"<field>\": [\"<message>\"]}]}}, unlike the employer endpoints' flat {\"errors\": {\"<field>\": [...]}}.",
+      "lastChecked": "2026-10-23",
       "method": "api"
     },
     {
@@ -489,11 +489,11 @@
       "scenario": "Title value format",
       "input": "Personal details with title \"Mr\" as displayed in the form",
       "expected": "Accepted",
-      "response": "\"is invalid\". The API expects lowercase, e.g. \"mr\".",
-      "notes": "",
+      "response": "Verified 23 Oct (GBR, partners sandbox): 422 title \"is invalid\". The API expects the lowercase value, e.g. \"mr\".",
+      "notes": "Automated check (Run checks): as an invited GBR employee with an employee assertion token.",
       "status": "Verified",
       "comments": "",
-      "lastChecked": "2026-09-30",
+      "lastChecked": "2026-10-23",
       "method": "api"
     },
     {
@@ -528,11 +528,11 @@
       "scenario": "Confirm token identity during onboarding",
       "input": "GET /v1/employee/current with an employee token for an employment that is not yet active",
       "expected": "Returns the employee the token belongs to",
-      "response": "\"The employment is expected to be active in order to perform this action\"",
-      "notes": "Cannot be used to debug tokens during self-onboarding, which happens before activation.",
+      "response": "Re-checked 23 Oct (GBR, partners sandbox): 400 \"The employment is expected to be active in order to perform this action\"",
+      "notes": "Cannot be used to debug tokens during self-onboarding, which happens before activation. Automated check (Run checks): as an invited GBR employee with an employee assertion token.",
       "status": "Known issue",
       "comments": "",
-      "lastChecked": "2026-09-30",
+      "lastChecked": "2026-10-23",
       "method": "api"
     },
     {
@@ -541,11 +541,11 @@
       "scenario": "Bank details during onboarding",
       "input": "Employee submits bank details in the flow before activation",
       "expected": "Saved via PUT /v1/employee/bank-account",
-      "response": "200",
-      "notes": "See Bank Details tab for endpoint, token and scope cases.",
+      "response": "Verified 23 Oct (GBR, partners sandbox): 200 for an invited employee, before activation.",
+      "notes": "See Bank Details tab for endpoint, token and scope cases. Automated check (Run checks): the endpoint behind the step, as an invited GBR employee with an employee assertion token.",
       "status": "Verified",
       "comments": "",
-      "lastChecked": "2026-09-30",
+      "lastChecked": "2026-10-23",
       "method": "sdk"
     },
     {

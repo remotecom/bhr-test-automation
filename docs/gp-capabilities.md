@@ -101,6 +101,10 @@ Guide rows A9–A20 ask what Remote returns, and whether a step is blocked, as a
 - **To record a behaviour:** after reviewing an observed result, add the step's expectation there, and update the row's Remote Response and Status in `guide.json`. A check never changes a status.
 - **Setup steps** (creating the employee, saving the forms a scenario needs) have to succeed. If one fails, the result is an error rather than a finding, with the request ID.
 
+## Employee self-onboarding checks
+
+Rows E1, E3, E4, E7 and E8 call the `/v1/employee/*` endpoints the way the SDK's `PayrollEmployeeOnboardingFlow` does: as the employee, with an employee assertion token (`urn:remote-api:employee:employment:<id>`, jwt-bearer grant, `RemoteClient.asAssertion`) and the SDK's envelopes (`{ personal_details }`, `{ bank_account_details }`). They act as an invited GBR GP employee already in the company (the flow checks leave several, so run those once first), create no employees, and save personal and bank details to that one employee. They run with **Run checks**. Code: `src/gp/guide/employee-checks.ts`. E2 (a country that doesn't require `name`) would need an employee in such a country, and E5/E6 are about what the SDK shows, so those stay manual.
+
 ## Token checks
 
 Rows T5 and T8 request assertion tokens (jwt-bearer grant) that should be refused, and compare Remote's status and `error_description` with the guide: an employment ID that doesn't exist (T5), and a wrong or rotated client secret (T8, after a control request with the right secret for the company owner). They keep no token and change nothing, so they run with **Run checks**. Code: `src/gp/guide/token-checks.ts`, using `RemoteClient.assertionGrant`. T6 (a company this client doesn't manage) needs a second client, and T7/T9 need an integration setting switched off, so those stay manual.

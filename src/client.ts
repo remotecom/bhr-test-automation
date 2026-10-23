@@ -6,6 +6,8 @@
  * 2. client_credentials grant — partner-level token (for countries, sandbox operations)
  *
  * The refresh_token is preferred when available because it gives company-scoped access.
+ * 3. jwt-bearer (assertion) grant — acting as a user or employee (`asAssertion`), as a partner's server
+ *    does for the SDK's employee flow.
  */
 
 import { createHmac } from "node:crypto";
@@ -46,6 +48,8 @@ export interface ClientConfig {
   gatewayEnv: string;
   gatewayUrl?: string;
   refreshToken?: string;
+  /** Act as this subject (jwt-bearer grant) instead of the company or the integration */
+  assertion?: { sub: string; scope: string };
 }
 
 export class RemoteClient {
@@ -73,6 +77,17 @@ export class RemoteClient {
   async getToken(): Promise<string> {
     const now = Date.now();
     if (this.token && this.token.expiresAt > now + 60_000) {
+      return this.token.accessToken;
+    }
+
+    if (this.config.assertion) {
+      const { sub, scope } = this.config.assertion;
+      const res = await this.jwtBearer(sub, scope);
+      const data = (await res.json().catch(() => ({}))) as Partial<TokenResponse> & { error?: string; error_description?: string };
+      if (!res.ok || !data.access_token) {
+        throw new Error(`Assertion token for ${sub} refused (${res.status}): ${data.error ?? ""} ${data.error_description ?? ""}`.trim());
+      }
+      this.token = { accessToken: data.access_token, expiresAt: now + (data.expires_in ?? 300) * 1000 };
       return this.token.accessToken;
     }
 
@@ -174,6 +189,26 @@ export class RemoteClient {
     return this.request<T>("DELETE", path);
   }
 
+  /** A client that acts as `sub` (e.g. an employee) through the jwt-bearer grant, with this one's credentials */
+  asAssertion(sub: string, scope: string): RemoteClient {
+    return new RemoteClient({ ...this.config, refreshToken: undefined, assertion: { sub, scope } });
+  }
+
+  /** POST the jwt-bearer grant: an HS256 assertion signed with the client secret, scope in the JWT and the body */
+  private jwtBearer(sub: string, scope: string, opts: { signWith?: string; sendWith?: string } = {}): Promise<Response> {
+    const now = Math.floor(Date.now() / 1000);
+    const assertion = signHS256(
+      { iss: this.config.clientId, sub, aud: `${this.baseUrl}/auth`, scope, iat: now, exp: now + 5 * 60 },
+      opts.signWith ?? this.config.clientSecret
+    );
+    const basic = Buffer.from(`${this.config.clientId}:${opts.sendWith ?? this.config.clientSecret}`).toString("base64");
+    return fetch(this.url("/auth/oauth2/token"), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Basic ${basic}` },
+      body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion, scope }),
+    });
+  }
+
   /**
    * Request an assertion token (jwt-bearer grant), as a partner's server would: an HS256 JWT signed
    * with the client secret, `scope` in both the JWT and the body, Basic auth. Nothing is cached and
@@ -187,17 +222,7 @@ export class RemoteClient {
     scope: string,
     opts: { signWith?: string; sendWith?: string } = {}
   ): Promise<ApiResponse<{ error?: string; error_description?: string; scope?: string }>> {
-    const now = Math.floor(Date.now() / 1000);
-    const assertion = signHS256(
-      { iss: this.config.clientId, sub, aud: `${this.baseUrl}/auth`, scope, iat: now, exp: now + 5 * 60 },
-      opts.signWith ?? this.config.clientSecret
-    );
-    const basic = Buffer.from(`${this.config.clientId}:${opts.sendWith ?? this.config.clientSecret}`).toString("base64");
-    const res = await fetch(this.url("/auth/oauth2/token"), {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Basic ${basic}` },
-      body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion, scope }),
-    });
+    const res = await this.jwtBearer(sub, scope, opts);
     const rawText = await res.text().catch(() => "");
     let parsed: Record<string, unknown> = {};
     try {
