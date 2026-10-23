@@ -1,5 +1,5 @@
 {
-  "title": "Global Payroll SDK Testing Guide (BambooHR)",
+  "title": "Global Payroll SDK Testing Guide",
   "subtitle": "Draft. Last updated 15 Oct 2026: statuses reconciled with Remote's tickets, Slack and sandbox runs up to that date. Rows re-tested after 30 Sep say so.",
   "overview": [
     {
@@ -68,7 +68,7 @@
       "response": "If the grant is not enabled: 400 invalid_grant, error_description \"Assertion grant is not enabled for this integration\"",
       "notes": "Controlled by the \"Act on behalf of users\" setting on the integration (formerly \"Create assertion tokens\"; API key create_assertion_tokens), per environment. Since 12 Oct it also gates company token creation (POST /v1/companies/{id}/create-token returns 403 without it). Remote must confirm it is on for BambooHR's integration in each environment.",
       "status": "Requires Remote",
-      "comments": "Our test results depend on our own integration's settings. BambooHR's integration is a separate record. Remote said on 12 Oct that BambooHR already has the setting on; confirm per environment.",
+      "comments": "Results here come from Remote's own test integration. Your integration is a separate record: confirm the setting is on for it in each environment.",
       "method": "api"
     },
     {
@@ -405,6 +405,44 @@
       "status": "Verified",
       "comments": "",
       "lastChecked": "2026-10-21",
+      "method": "api"
+    },
+    {
+      "id": "A19",
+      "tab": "admin",
+      "scenario": "GP employment with a required basic-information field missing",
+      "input": "POST /v1/employments with type global_payroll_employee and one required basic_information field left out (in GBR: name)",
+      "expected": "Request refused with 422, and the error names the missing field",
+      "response": "Verified 23 Oct (GBR, partners sandbox): 422 \"Unprocessable Entity\" with errors {\"name\": [\"can't be blank\"]}. The error is keyed by the field name itself, not nested under basic_information.",
+      "notes": "Automated flow check: runs in GBR (Run flow checks). The check leaves out the first required field the form fills with plain text; login_email is skipped because it comes paired with personal_email or work_email.",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-10-23",
+      "method": "api"
+    },
+    {
+      "id": "A20",
+      "tab": "admin",
+      "scenario": "Two GP employments with the same external_employment_id",
+      "input": "Create a GP employment with basic_information.external_employment_id set, then a second one in the same company with the same value",
+      "expected": "Accepted (201): external_employment_id is not unique within a company. Keep your own IDs unique; Remote does not enforce it.",
+      "response": "Verified 23 Oct (GBR, partners sandbox): both employments created (201), each returned with the same external_id.",
+      "notes": "Automated flow check: runs in GBR (Run flow checks). Sent as basic_information.external_employment_id; returned on the employment as external_id. Unlike a company's external_id in the EOR Company Creation guide, which must be unique within an integration, this one is not checked.",
+      "status": "Verified",
+      "comments": "",
+      "lastChecked": "2026-10-23",
+      "method": "api"
+    },
+    {
+      "id": "A21",
+      "tab": "admin",
+      "scenario": "Same email or external_employment_id after the first GP employment is offboarded",
+      "input": "Offboard a GP employee, then create a new GP employment with the same email or external_employment_id (a rehire)",
+      "expected": "Shows whether a rehire with the same details is accepted",
+      "response": "To be recorded.",
+      "notes": "Not automated: it needs a GP employee taken through offboarding. See A17 (email) and A20 (external_employment_id) for active employments.",
+      "status": "Untested",
+      "comments": "",
       "method": "api"
     },
     {

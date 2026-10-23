@@ -5,7 +5,7 @@
  * the export API route and the CLI.
  *
  * The "test cases" CSV uses the same columns as the Global Payroll SDK
- * Testing Guide (BambooHR) sheet, so rows can be pasted straight in:
+ * Testing Guide sheet, so rows can be pasted straight in:
  *   Test Case # | Scenario | Input Data | Expected Outcome |
  *   Remote Response/Error Message | Blocking Logic/Notes | Status | Comments
  */

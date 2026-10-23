@@ -2,7 +2,7 @@
  * Types for the GP SDK testing guide (the partner-facing test cases shown on the Payroll tab).
  *
  * The guide itself lives in data/gp-guide/guide.json and is the source of truth. It round-trips
- * with the "Global Payroll SDK Testing Guide (BambooHR)" spreadsheet: export with
+ * with the "Global Payroll SDK Testing Guide" spreadsheet: export with
  * `npm run gp:guide:export`, edit in Excel or Google Sheets, bring it back with `npm run gp:guide:import`.
  *
  * Partner-facing only: nothing internal (ticket IDs, internal tracking) belongs here.

@@ -4,7 +4,7 @@ The **Payroll (GP)** tab reports which Global Payroll onboarding forms the Remot
 
 It supports two audiences (from the Mohit / James 1:1 on 2026-10-05):
 
-- **External (partner enablement):** a capability matrix and test cases you can hand to a partner, such as BambooHR, during SDK onboarding. The test cases use the same columns as the *Global Payroll SDK Testing Guide (BambooHR)* sheet.
+- **External (partner enablement):** a capability matrix and test cases you can hand to a partner, such as BambooHR, during SDK onboarding. The test cases use the same columns as the *Global Payroll SDK Testing Guide* sheet, which follows the layout of the EOR Company Creation Testing Guide. The guide is partner-neutral: keep partner names and partner-specific notes out of it, so the same guide can go to every GP partner.
 - **Internal (regression):** `npm run gp:capabilities -- --strict` exits 1 when coverage drifts. You can use it as a CI gate before merging a new SDK version.
 
 ## What it does (read-only)
@@ -68,7 +68,7 @@ Settled results live in `data/gp-field-checks.ts` and show until a live check re
 
 ## Testing guide (Test cases)
 
-The Payroll tab opens on **Test cases**: the *Global Payroll SDK Testing Guide (BambooHR)*, one row per case (Setup, Admin onboarding, Employee onboarding, Bank details, Tokens & auth), plus Country coverage. Each row shows the guide's status, how the case is tested, when it was last checked and, where one exists, the latest automated check.
+The Payroll tab opens on **Test cases**: the *Global Payroll SDK Testing Guide*, one row per case (Setup, Admin onboarding, Employee onboarding, Bank details, Tokens & auth), plus Country coverage. Each row shows the guide's status, how the case is tested, when it was last checked and, where one exists, the latest automated check.
 
 - **Source of truth:** `data/gp-guide/guide.json`. It is partner-facing: no ticket IDs, tracker links or internal notes (the importer and a unit test refuse them). Track tickets in the sheet's internal tab or in Linear.
 - **Spreadsheet round trip:** `npm run gp:guide:export -- guide.xlsx` writes the same tabs and columns as the Google Sheet (status dropdown and colours included), plus *Last checked* and *How tested*. Edit it in Excel or Google Sheets, download as .xlsx, then `npm run gp:guide:import -- guide.xlsx` and review `git diff data/gp-guide/guide.json`. Tabs the guide doesn't know are ignored. **Download .xlsx** on the tab gives the same file with a *Latest automated check* column, which import ignores.
@@ -94,9 +94,9 @@ Where it goes (`src/gp/guide/published-store.ts`):
 
 ## Functional checks (errors and blocked steps)
 
-Guide rows A9–A18 ask what Remote returns, and whether a step is blocked, as an employer goes through GP onboarding: inviting before the forms are saved, saving the forms out of order, a missing field, an invalid option, an entity without GP, a reused email address, a start date less than 2 working days away. `src/gp/guide/flow.ts` runs each as a short scenario in GBR, with a fresh test employee per scenario, and observes every step: the status, the message, the fields named, and whether it was blocked.
+Guide rows A9–A20 ask what Remote returns, and whether a step is blocked, as an employer goes through GP onboarding: inviting before the forms are saved, saving the forms out of order, a missing field, an invalid option, an entity without GP, a reused email address, a start date less than 2 working days away, and, when creating the employee, a missing basic-information field or a repeated `external_employment_id` (A19, A20; the GP counterparts of the EOR guide's creation rows). A21, a rehire after offboarding, is manual. `src/gp/guide/flow.ts` runs each as a short scenario in GBR, with a fresh test employee per scenario, and observes every step: the status, the message, the fields named, and whether it was blocked.
 
-- **Run them** with **Run flow checks** on the Test cases view (local runs only). A full run creates about 6 GP test employees in the connected test company and sends invites to `@example.com` addresses. Scenarios share employees where it changes no answer: one whose every step Remote refused (A9, A15) goes to the next scenario, A12 repeats A11's invite, and A17 reuses an email from the run. Each result notes what it reused. **Run checks** doesn't include them.
+- **Run them** with **Run flow checks** on the Test cases view (local runs only). A full run creates about 6 GP test employees in the connected test company and sends invites to `@example.com` addresses. Scenarios share employees where it changes no answer: A20's two employees are only created, and one whose every step Remote refused (A9, A15) goes to the next scenario, A12 repeats A11's invite, and A17 reuses an email from the run. Each result notes what it reused. **Run checks** doesn't include them.
 - **Expectations** live in `data/gp-guide/functional-expectations.ts`. A step with an expectation is compared (*as recorded* or *differs*). A step without one is reported as **observed**, meaning new behaviour for a person to review.
 - **To record a behaviour:** after reviewing an observed result, add the step's expectation there, and update the row's Remote Response and Status in `guide.json`. A check never changes a status.
 - **Setup steps** (creating the employee, saving the forms a scenario needs) have to succeed. If one fails, the result is an error rather than a finding, with the request ID.

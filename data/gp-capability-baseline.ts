@@ -12,7 +12,7 @@
  *   - GP SDK test harness sandbox sweep (partners sandbox, 2026-09-30):
  *     57 countries publish contract details, 56 publish personal details.
  *     Edge cases below come from this sweep and override the May list.
- *   - Global Payroll SDK Testing Guide (BambooHR), Country Coverage tab.
+ *   - Global Payroll SDK Testing Guide, Country Coverage tab.
  *
  * Update this file when a fresh sweep is accepted as the new truth.
  */

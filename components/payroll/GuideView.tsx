@@ -61,7 +61,15 @@ function Field({ label, text }: { label: string; text?: string }) {
   );
 }
 
-function CaseDetail({ c, check, automatedLabel, unpublished }: { c: GuideCase; check?: GuideCheckResult; automatedLabel?: string; unpublished: boolean }) {
+function CaseDetail({ c, check, automatedLabel, unpublished, onRun, running }: {
+  c: GuideCase;
+  check?: GuideCheckResult;
+  automatedLabel?: string;
+  unpublished: boolean;
+  /** Run just this row's check (local runs only) */
+  onRun?: () => void;
+  running?: boolean;
+}) {
   return (
     <div className="gg-detail">
       <div className="gg-detail-col">
@@ -76,6 +84,18 @@ function CaseDetail({ c, check, automatedLabel, unpublished }: { c: GuideCase; c
           <div className="gg-field">
             <div className="gp-detail-title">Automated check</div>
             <div className="gg-field-text gp-muted">{automatedLabel}.</div>
+            {onRun && (
+              <div className="gg-field-text">
+                <button
+                  className="gg-btn"
+                  disabled={running}
+                  onClick={onRun}
+                  title={FUNCTIONAL_CASE_IDS.includes(c.id) ? "Runs only this flow check. It may create GP test employees and send invites to @example.com addresses." : "Runs only this check against your test company."}
+                >
+                  {running ? "Running…" : "Run this check"}
+                </button>
+              </div>
+            )}
             {check ? (
               <div className="gg-field-text">
                 <span className={checkBadge(c, check).cls}>{checkBadge(c, check).text}</span>
@@ -279,7 +299,14 @@ export default function GuideView({ runsEnabled, employments, report }: {
                     {open && (
                       <tr className="gp-detail-row">
                         <td colSpan={6}>
-                          <CaseDetail c={c} check={check} automatedLabel={automated[c.id]} unpublished={runsEnabled && !!local[c.id]} />
+                          <CaseDetail
+                            c={c}
+                            check={check}
+                            automatedLabel={automated[c.id]}
+                            unpublished={runsEnabled && !!local[c.id]}
+                            onRun={runsEnabled && automated[c.id] ? () => run(employments, [c.id]) : undefined}
+                            running={running || publishing}
+                          />
                         </td>
                       </tr>
                     )}

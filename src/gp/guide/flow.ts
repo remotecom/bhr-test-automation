@@ -10,10 +10,11 @@
  *   a setup step failed, or a 5xx -> error
  *
  * Scenarios that change an employee's state (save, invite) start from an employee no other scenario
- * has changed. To keep the count down, a run shares employees where that holds: one whose every step
- * Remote refused (A9's invite, A15's save) goes back to a pool for the next scenario, A12 repeats
- * A11's invite, and A17 reuses an email from the run. A full run creates about six GP test employees
- * in GBR (A16 may add a legal entity without GP). Each result notes any employee it reused.
+ * has changed. To keep the count down, a run shares employees where that holds: A20's two employees
+ * are only created, and one whose every step Remote refused (A9's invite, A15's save) goes back to a
+ * pool for the next scenario; A12 repeats A11's invite, and A17 reuses an email from the run. A full
+ * run creates about six GP test employees in GBR (A16 may add a legal entity without GP). Each result
+ * notes any employee it reused.
  */
 
 import type { ApiResponse, RemoteClient } from "../../client";
@@ -45,6 +46,8 @@ export interface StepObservation {
   requestId?: string;
   /** The field a negative test changed or left out */
   target?: string;
+  /** Employment a create step made (POST /v1/employments accepted) */
+  employmentId?: string;
 }
 
 export type StepVerdict = "match" | "mismatch" | "new" | "server_error";
@@ -186,17 +189,47 @@ class Runner {
     return this.record(observation(key, label, res));
   }
 
-  /** Create a GP employment directly (for scenarios createGPTestEmployee would refuse to set up) */
-  async createEmployment(key: string, label: string, code: string, legalEntityId: string, email: string): Promise<StepObservation> {
+  /**
+   * Create a GP employment directly (for scenarios createGPTestEmployee would refuse to set up).
+   * `mutate` changes basic_information for a negative test and returns the field it changed.
+   */
+  async createEmployment(
+    key: string,
+    label: string,
+    code: string,
+    legalEntityId: string,
+    email: string,
+    mutate?: (info: Json, schema: Json | null) => string | undefined
+  ): Promise<StepObservation> {
     const schemaRes = await this.client.get(`/v1/countries/${code}/global_payroll_basic_information`);
     const schema = schemaRes.status === 200 ? unwrapSchema(schemaRes.data) : null;
-    const res = await this.client.post("/v1/employments", {
+    const info = buildBasicInformation(schema, `GP Test ${code}`, email);
+    const changed = mutate?.(info, schema);
+    const res = await this.client.post<{ data?: { employment?: { id?: string } } }>("/v1/employments", {
       type: "global_payroll_employee",
       country_code: code,
       engaged_by_legal_entity_id: legalEntityId,
-      basic_information: buildBasicInformation(schema, `GP Test ${code}`, email),
+      basic_information: info,
     });
-    return this.record(observation(key, label, res));
+    const obs = observation(key, label, res, "basic_information", changed);
+    if (res.status < 300 && typeof res.data?.data?.employment?.id === "string") obs.employmentId = res.data.data.employment.id;
+    return this.record(obs);
+  }
+
+  /** The company's GP-enabled legal entity in the flow country, setting one up (via a test employee) if needed */
+  async gpEntity(): Promise<string> {
+    const entities = summarizeEntities(await getCompanyEntities(this.client, this.ctx.companySlug));
+    const on = entities.find((e) => e.gpEnabled && e.countryCode === FLOW_COUNTRY);
+    return on ? on.id : (await this.employee()).legalEntityId;
+  }
+
+  /** Hand an employee a create step made, and nothing else touched, to a later scenario */
+  releaseCreated(step: StepObservation, email: string, legalEntityId: string): void {
+    if (step.employmentId) {
+      const made = { id: step.employmentId, email, legalEntityId };
+      this.pool.made.push(made);
+      this.pool.untouched.push({ ...made, from: this.caseId });
+    }
   }
 
   /** What onboarding-steps says after a scenario (context only, never judged) */
@@ -287,6 +320,38 @@ const CONTRACT = "contract_details" as const;
 const ADMIN = "administrative_details" as const;
 
 export const FUNCTIONAL_CHECKS: Record<string, { label: string; run: (ctx: GuideCheckContext) => Promise<Omit<GuideCheckResult, "caseId" | "checkedAt">> }> = {
+  A19: {
+    label: `Creates a ${FLOW_COUNTRY} GP employment with a required basic-information field left out`,
+    run: (ctx) => runScenario(ctx, "A19", "create_missing_field", async (r) => {
+      const entity = await r.gpEntity();
+      const email = `gp-test+missing-${Date.now()}@example.com`;
+      const obs = await r.createEmployment("create_missing_field", "GP employment missing a required field", FLOW_COUNTRY, entity, email, (info, schema) => {
+        // The first required field the payload fills with a plain value (login fields excepted: they come as a pair)
+        const req = Array.isArray(schema?.required) ? (schema!.required as string[]) : [];
+        const field = req.find((f) => f !== "login_email" && typeof info[f] === "string");
+        if (field) delete info[field];
+        return field;
+      });
+      if (obs.target) r.notes.push(`Left out: ${obs.target}`);
+      if (obs.employmentId) r.notes.push("The employment was created; it stays in the test company");
+    }),
+  },
+  A20: {
+    label: `Creates two ${FLOW_COUNTRY} GP employments with the same external_employment_id`,
+    run: (ctx) => runScenario(ctx, "A20", "create_with_used_external_id", async (r) => {
+      const entity = await r.gpEntity();
+      const externalId = `gp-test-ext-${Date.now()}`;
+      const setId = (info: Json) => ((info.external_employment_id = externalId), "external_employment_id");
+      const emails = [1, 2].map((n) => `gp-test+ext${n}-${Date.now()}@example.com`);
+      const first = await r.createEmployment("create_with_external_id", "GP employment with an external_employment_id", FLOW_COUNTRY, entity, emails[0], setId);
+      if (first.blocked) return;
+      const second = await r.createEmployment("create_with_used_external_id", "Second GP employment with the same external_employment_id", FLOW_COUNTRY, entity, emails[1], setId);
+      r.notes.push(`external_employment_id: ${externalId}`);
+      // Created and otherwise untouched: later scenarios use them instead of creating their own
+      r.releaseCreated(first, emails[0], entity);
+      r.releaseCreated(second, emails[1], entity);
+    }),
+  },
   A9: {
     label: `Creates a ${FLOW_COUNTRY} test employee and invites them before any form is saved`,
     run: (ctx) => runScenario(ctx, "A9", "invite_without_forms", async (r) => {

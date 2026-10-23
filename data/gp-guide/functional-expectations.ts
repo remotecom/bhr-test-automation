@@ -23,10 +23,11 @@ export interface StepExpectation {
 
 /**
  * Guide rows backed by a functional check. They create GP test employees and send invites, so they
- * run from their own button ("Run flow checks"), not with the quick checks. Listed in run order: A15
- * before A14, so A14 can reuse the employee whose save A15 had refused (see flow.ts).
+ * run from their own button ("Run flow checks"), not with the quick checks. Listed in run order (see
+ * flow.ts): A19/A20 first, as A20's employees are left untouched for later scenarios; A15 before A14,
+ * so A14 can reuse the employee whose save A15 had refused.
  */
-export const FUNCTIONAL_CASE_IDS = ["A9", "A10", "A11", "A12", "A13", "A15", "A14", "A16", "A17", "A18"];
+export const FUNCTIONAL_CASE_IDS = ["A19", "A20", "A9", "A10", "A11", "A12", "A13", "A15", "A14", "A16", "A17", "A18"];
 
 /** caseId -> step key -> expectation. Step keys are defined by each check in src/gp/guide/flow.ts */
 export const FUNCTIONAL_EXPECTATIONS: Record<string, Record<string, StepExpectation>> = {
@@ -58,4 +59,8 @@ export const FUNCTIONAL_EXPECTATIONS: Record<string, Record<string, StepExpectat
   A17: { create_with_used_email: { blocked: false } },
   // The invite is refused when the start date is less than 2 working days away (seen 30 Sep in the GP SDK harness)
   A18: { invite_near_start_date: { blocked: true, status: [409], message: "at least 2 working days" } },
+  // A required basic-information field missing at creation is refused, naming the field (23 Oct)
+  A19: { create_missing_field: { blocked: true, status: [422], fields: ["$omitted"] } },
+  // A repeated external_employment_id is accepted: it isn't unique within a company (23 Oct)
+  A20: { create_with_external_id: { blocked: false }, create_with_used_external_id: { blocked: false } },
 };

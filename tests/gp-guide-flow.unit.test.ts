@@ -175,8 +175,9 @@ describe("GP functional checks: scenarios", () => {
     expect((await FUNCTIONAL_CHECKS.A18.run(fakeClient().ctx)).outcome).toBe("differs");
   });
 
-  it("GP-FL12 a full run shares employees: refused steps free them, A12 repeats A11's invite, A17 reuses an email", async () => {
-    // Remote as recorded: A9's invite and A15's invalid option are refused
+  it("GP-FL12 a full run shares employees: A20's and refused ones are reused, A12 repeats A11's invite, A17 reuses an email", async () => {
+    // Remote as recorded: A9's invite, A15's invalid option, A16's entity and A19's incomplete create are refused
+    let refusedCreates = 0;
     const { ctx, calls } = fakeClient((m, p, body) => {
       const emp = p.match(/employments\/([^/]+)\/invite$/)?.[1];
       if (m === "POST" && emp && !calls.some((c) => c.method === "PUT" && c.path === `/v2/employments/${emp}/contract-details`)) {
@@ -188,24 +189,50 @@ describe("GP functional checks: scenarios", () => {
       if (m === "GET" && /legal-entities$/.test(p)) {
         return { status: 200, data: { data: [{ slug: "le-gbr", country_code: "GBR", global_payroll_enabled: true }, { slug: "le-nld", country_code: "NLD", global_payroll_enabled: false }] } };
       }
-      if (m === "POST" && p === "/v1/employments" && (body as { engaged_by_legal_entity_id?: string }).engaged_by_legal_entity_id === "le-nld") {
-        return { status: 422, data: { message: "Global Payroll is not enabled on given legal entity" } };
+      if (m === "POST" && p === "/v1/employments") {
+        const b = body as { engaged_by_legal_entity_id?: string; basic_information?: Record<string, unknown> };
+        if (b.engaged_by_legal_entity_id === "le-nld") return (refusedCreates++, { status: 422, data: { message: "Global Payroll is not enabled on given legal entity" } });
+        if (b.basic_information && !("name" in b.basic_information)) return (refusedCreates++, { status: 422, data: { errors: { basic_information: { name: ["can't be blank"] } } } });
       }
       return undefined;
     });
     const results = await runGuideChecks(ctx, FUNCTIONAL_CASE_IDS);
 
-    const created = calls.filter((c) => c.method === "POST" && c.path === "/v1/employments").length;
-    // A9 (reused by A10), A11 (reused by A12), A13, A15 (reused by A14), A16's refused try, A17's duplicate, A18
-    expect(created).toBe(7);
+    const created = calls.filter((c) => c.method === "POST" && c.path === "/v1/employments").length - refusedCreates;
+    // A20's two (reused by A9, A10 and A11), A13, A15 (reused by A14), A17's duplicate, A18
+    expect(created).toBe(6);
     const note = (id: string) => results.find((r) => r.caseId === id)!.details.join("\n");
-    expect(note("A10")).toMatch(/Reused the test employee from A9/);
+    for (const id of ["A9", "A10", "A11"]) expect(note(id), id).toMatch(/Reused the test employee from A(20|9)/);
     expect(note("A12")).toMatch(/Reused the invited test employee from A11/);
     expect(note("A14")).toMatch(/Reused the test employee from A15/);
     expect(note("A17")).toMatch(/Reused the email of a test employee created earlier in this run/);
     expect(note("A18")).not.toMatch(/Reused/);
     // Sharing changes no answer (the fake has no start-date rule, so A18 is left to GP-FL10)
     expect(results.filter((r) => r.caseId !== "A18" && r.outcome !== "as_recorded").map((r) => `${r.caseId}: ${r.summary}`)).toEqual([]);
+  });
+
+  it("GP-FL13 A19 leaves out a required basic-information field; A20 repeats an external_employment_id", async () => {
+    const a19 = fakeClient((m, p, body) =>
+      m === "POST" && p === "/v1/employments" && !("name" in ((body as { basic_information: Record<string, unknown> }).basic_information))
+        ? { status: 422, data: { errors: { basic_information: { name: ["can't be blank"] } } } }
+        : undefined
+    );
+    const r19 = await FUNCTIONAL_CHECKS.A19.run(a19.ctx);
+    const sent19 = a19.calls.find((c) => c.method === "POST" && c.path === "/v1/employments")!.body as { basic_information: Record<string, unknown> };
+    expect(sent19.basic_information).not.toHaveProperty("name");
+    expect(sent19.basic_information).toHaveProperty("login_email");
+    expect(r19.outcome).toBe("as_recorded");
+    expect(r19.summary).toMatch(/refused \(422\).*as expected/);
+    expect(r19.details.join("\n")).toMatch(/Left out: name/);
+
+    const a20 = fakeClient();
+    const r20 = await FUNCTIONAL_CHECKS.A20.run(a20.ctx);
+    const creates = a20.calls.filter((c) => c.method === "POST" && c.path === "/v1/employments").map((c) => (c.body as { basic_information: Record<string, unknown> }).basic_information);
+    expect(creates).toHaveLength(2);
+    expect(creates[0].external_employment_id).toBeTruthy();
+    expect(creates[1].external_employment_id).toBe(creates[0].external_employment_id);
+    expect(creates[1].personal_email).not.toBe(creates[0].personal_email);
+    expect(r20.outcome).toBe("as_recorded");
   });
 
   it("GP-FL11 test employees outside A18 start 30 days out, clear of the 2-working-day rule", async () => {
